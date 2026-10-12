@@ -1,0 +1,88 @@
+#!/bin/bash
+set -euo pipefail
+umask 077
+
+dnf install -y docker awscli-2 python3 curl
+systemctl enable --now docker amazon-ssm-agent
+
+install -d -m 0755 /usr/local/lib/docker/cli-plugins
+curl --fail --location --retry 5 \
+  https://github.com/docker/compose/releases/download/v5.6.0/docker-compose-linux-x86_64 \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+echo '40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a  /usr/local/lib/docker/cli-plugins/docker-compose' | sha256sum --check --status
+chmod 0755 /usr/local/lib/docker/cli-plugins/docker-compose
+
+install -d -m 0700 /opt/punto-gamer/rabbitmq
+printf '%s' '${compose_base64}' | base64 --decode > /opt/punto-gamer/rabbitmq/compose.yml
+printf '%s' '${config_base64}' | base64 --decode > /opt/punto-gamer/rabbitmq/rabbitmq.conf
+chmod 0644 /opt/punto-gamer/rabbitmq/rabbitmq.conf
+
+cat > /usr/local/sbin/punto-gamer-rabbitmq-start <<'START'
+#!/bin/bash
+set -euo pipefail
+umask 077
+cd /opt/punto-gamer/rabbitmq
+
+# Leer secretos con el rol de la EC2, sin incluirlos en user_data ni en el estado Terraform.
+secret_file=$(mktemp)
+trap 'rm -f "$secret_file"' EXIT
+aws ssm get-parameters --region '${region}' --with-decryption \
+  --names '${password_path}' '${cookie_path}' --output json > "$secret_file"
+python3 - "$secret_file" <<'PY'
+import json
+import os
+import re
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    response = json.load(stream)
+values = {item["Name"]: item for item in response.get("Parameters", [])}
+names = {"RABBITMQ_PASSWORD": "${password_path}", "RABBITMQ_ERLANG_COOKIE": "${cookie_path}"}
+lines = []
+for key, name in names.items():
+    item = values.get(name)
+    if not item or item.get("Type") != "SecureString":
+        raise SystemExit("Falta un parametro SecureString requerido en SSM: " + name)
+    value = item["Value"]
+    if not re.fullmatch(r"[A-Za-z0-9_-]{32,128}", value):
+        raise SystemExit("El secreto debe tener entre 32 y 128 letras, numeros, guiones o guiones bajos: " + name)
+    lines.append(key + "=" + value + "\n")
+with open(".env.tmp", "w", encoding="utf-8") as stream:
+    stream.writelines(lines)
+os.chmod(".env.tmp", 0o600)
+os.replace(".env.tmp", ".env")
+PY
+
+docker compose -f compose.yml config --quiet
+docker compose -f compose.yml up -d --wait --wait-timeout 600
+docker compose -f compose.yml exec -T rabbitmq-1 rabbitmqctl cluster_status
+
+# Comprobar que se formaron tres nodos, ademas del estado saludable de cada contenedor.
+docker compose -f compose.yml exec -T rabbitmq-1 rabbitmqctl --formatter json cluster_status | python3 -c \
+  'import json,sys; status=json.load(sys.stdin); sys.exit(0 if len(status.get("running_nodes", [])) == 3 else "El cluster no tiene tres nodos activos")'
+START
+chmod 0700 /usr/local/sbin/punto-gamer-rabbitmq-start
+
+cat > /etc/systemd/system/punto-gamer-rabbitmq.service <<'UNIT'
+[Unit]
+Description=Punto Gamer RabbitMQ cluster
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/punto-gamer/rabbitmq
+ExecStart=/usr/local/sbin/punto-gamer-rabbitmq-start
+ExecStop=/usr/bin/docker compose -f compose.yml stop
+TimeoutStartSec=900
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now punto-gamer-rabbitmq.service

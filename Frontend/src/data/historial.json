@@ -1,0 +1,55 @@
+[
+  {
+    "idTransaccion": "T001",
+    "userId": "U001", 
+    "usuarioNombreCompleto": "Admin Sistema",
+    "fechaCompra": "2025-09-15",
+    "totalOrden": 249900,
+    "productosComprados": [
+      {
+        "idProducto": "KB001",
+        "nombreProducto": "Teclado Wooting 60HE",
+        "precioUnitario": 179990,
+        "cantidad": 1,
+        "subtotal": 179990
+      },
+      {
+        "idProducto": "MS001",
+        "nombreProducto": "Mouse Gamer Logitech G502 HERO",
+        "precioUnitario": 49990,
+        "cantidad": 1,
+        "subtotal": 49990
+      },
+      {
+        "idProducto": "PP001",
+        "nombreProducto": "Polera Gamer Personalizada 'Level-Up'",
+        "precioUnitario": 14990,
+        "cantidad": 1,
+        "subtotal": 14990
+      }
+    ]
+  },
+  {
+    "idTransaccion": "T002",
+    "userId": "U002",
+    "usuarioNombreCompleto": "Usuario Normal",
+    "fechaCompra": "2025-10-01",
+    "totalOrden": 709790,
+    "productosComprados": [
+      {
+        "idProducto": "CO001",
+        "nombreProducto": "PlayStation 5",
+        "precioUnitario": 549990,
+        "cantidad": 1,
+        "subtotal": 549990
+      },
+      {
+        "idProducto": "AC002",
+        "nombreProducto": "Auriculares Gamer HyperX Cloud II",
+        "precioUnitario": 79990,
+        "cantidad": 2,
+        "subtotal": 159800
+      }
+    ]
+  }
+]

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.angular/
+out-tsc/
+.test-build/
+.env
+.env.*
+!.env.example
+*.log

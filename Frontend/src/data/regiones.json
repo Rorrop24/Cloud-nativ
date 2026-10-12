@@ -1,0 +1,50 @@
+[
+  { "region": "Región de Arica y Parinacota", 
+  "comunas": ["Arica","Camarones","Putre","General Lagos"] 
+},
+  { "region": "Región de Tarapacá", 
+  "comunas": ["Iquique","Alto Hospicio","Pozo Almonte","Pica"] 
+},
+  { "region": "Región de Antofagasta", 
+  "comunas": ["Antofagasta","Mejillones","Sierra Gorda","Taltal","Calama","San Pedro de Atacama","Tocopilla"] 
+},
+  { "region": "Región de Atacama", 
+  "comunas": ["Copiapó","Caldera","Tierra Amarilla","Vallenar","Freirina","Chañaral","Diego de Almagro"] 
+},
+  { "region": "Región de Coquimbo", 
+  "comunas": ["La Serena","Coquimbo","Andacollo","Ovalle","Illapel","Los Vilos","Salamanca","Combarbalá","Monte Patria","Punitaqui","Río Hurtado"] 
+},
+  { "region": "Región de Valparaíso", 
+  "comunas": ["Valparaíso","Viña del Mar","Quilpué","Villa Alemana","Concón","Quintero","Puchuncaví","Casablanca","San Antonio","Cartagena","El Tabo","El Quisco","Santo Domingo","Algarrobo","Rinconada de Los Andes","San Felipe","Los Andes","Santa María","Putaendo","Panquehue","Llay Llay","Catemu","Calle Larga","Rinconada","Cabildo","La Ligua","Petorca","Zapallar","Papudo"] 
+},
+  { "region": "Región Metropolitana de Santiago", 
+  "comunas": ["Santiago","Cerrillos","Cerro Navia","Conchalí","El Bosque","Estación Central","Huechuraba","Independencia","La Cisterna","La Florida","La Granja","La Pintana","La Reina","Las Condes","Lo Barnechea","Lo Espejo","Lo Prado","Macul","Maipú","Pedro Aguirre Cerda","Peñalolén","Providencia","Pudahuel","Quilicura","Quinta Normal","Recoleta","Renca","San Joaquín","San Miguel","San Ramón","Vitacura","Puente Alto","Pirque","San José de Maipo","Colina","Lampa","Tiltil","San Bernardo","Buin","Calera de Tango","Paine","Melipilla","Alhué","Curacaví","María Pinto","San Pedro"]
+ },
+  { "region": "Región del Libertador General Bernardo O'Higgins", 
+  "comunas": ["Rancagua","Machalí","Graneros","Codegua","Doñihue","Coinco","Coltauco","Requínoa","Mostazal","Olivar","San Vicente","Peumo","Pichidegua","Las Cabras","La Estrella","Litueche","La Junta","Navidad","Paredones","San Fernando","Chimbarongo","Nancagua","Placilla","Pumanque","Santa Cruz","Lolol","Palmilla","Peralillo","Marchihue","Litueche"]
+ },
+  { "region": "Región del Maule", 
+  "comunas": ["Talca","Pelarco","Pencahue","Maule","San Clemente","Curicó","Hualañé","Licantén","Vichuquén","Linares","San Javier","Villa Alegre","Yerbas Buenas","Colbún","Longaví","Parral","Retiro","San Rafael","Rio Claro","Teno","Cauquenes","Chanco","Pelluhue"]
+ },
+  { "region": "Región de Ñuble", 
+  "comunas": ["Chillán","Chillán Viejo","Bulnes","San Carlos","El Carmen","Pemuco","Pinto","Quillón","San Ignacio","Coihueco","Ñiquén","San Fabián","San Nicolás"] 
+},
+  { "region": "Región del Biobío", 
+  "comunas": ["Concepción","Coronel","Chiguayante","Florida","Hualpén","Hualqui","Lota","Penco","San Pedro de la Paz","Santa Juana","Talcahuano","Tomé","Hualqui","Cabrero","Lebu","Arauco","Curanilahue","Los Ángeles","Antuco","Cabrero","Laja","Mulchén","Nacimiento","Negrete","Quilaco","Quilleco","San Rosendo","Santa Bárbara","Tucapel","Yumbel"]
+ },
+  { "region": "Región de La Araucanía", 
+  "comunas": ["Temuco","Carahue","Cunco","Curarrehue","Freire","Galvarino","Gorbea","Lautaro","Loncoche","Melipeuco","Nueva Imperial","Padre Las Casas","Perquenco","Pitrufquén","Pucón","Saavedra","Teodoro Schmidt","Toltén","Vilcún","Villarrica"]
+ },
+  { "region": "Región de Los Ríos", 
+  "comunas": ["Valdivia","Corral","Lanco","Los Lagos","Máfil","Mariquina","Paillaco","Panguipulli","La Unión","Futrono","Lago Ranco","Río Bueno"] 
+},
+  { "region": "Región de Los Lagos", 
+  "comunas": ["Puerto Montt","Calbuco","Cochamó","Fresia","Frutillar","Llanquihue","Los Muermos","Maullín","Puerto Varas","Castro","Ancud","Chonchi","Curaco de Vélez","Dalcahue","Puqueldón","Queilén","Quellón","Quemchi","Quinchao","Osorno","Puerto Octay","Puyehue","Río Negro","San Juan de la Costa","San Pablo"] 
+},
+  { "region": "Región de Aysén", 
+  "comunas": ["Coyhaique","Lago Verde","Chile Chico","Río Ibáñez","Aysén","Cisnes","Guaitecas","Puerto Aysén","Puerto Chacabuco","Puerto Cisnes"] 
+},
+  { "region": "Región de Magallanes y de la Antártica Chilena", 
+  "comunas": ["Punta Arenas","Laguna Blanca","Río Verde","San Gregorio","Porvenir","Primavera","Timaukel","Torres del Paine","Cabo de Hornos","Antártica","Puerto Natales","Puerto Toro"] 
+}
+]

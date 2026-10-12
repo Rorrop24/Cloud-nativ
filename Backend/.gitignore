@@ -1,0 +1,11 @@
+/target/
+.env
+.env.*
+!.env.example
+*.log
+application-secret.*
+Wallet*/
+wallet*/
+*.jks
+*.p12
+*.sso
