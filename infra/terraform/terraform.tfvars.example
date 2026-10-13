@@ -1,11 +1,12 @@
-# Completar con tu cuenta y red existentes. Este archivo no crea una VPC.
+# Completar con tu cuenta. Terraform crea la VPC, la subred y sus security groups.
 aws_account_id = "123456789012"
 aws_region     = "us-east-1"
-subnet_id      = "subnet-0123456789abcdef0"
 
-# SG de la EC2 donde corre el backend, en la misma VPC.
-# Si se deja vacio, se puede administrar por SSM, pero el backend no podra conectarse.
-backend_security_group_ids = ["sg-0123456789abcdef0"]
+# AWS Academy/Learner Lab: reutilizar el perfil autorizado, sin crear roles IAM.
+# existing_instance_profile_name = "LabInstanceProfile"
+
+# Omitir para elegir una zona compatible; luego fijarla usando el output availability_zone.
+# availability_zone = "us-east-1a"
 
 project_name                = "punto-gamer"
 environment                 = "dev"

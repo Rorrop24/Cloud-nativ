@@ -16,7 +16,7 @@ instrucciones para ejecutar despues: no se han creado recursos AWS al escribirla
 | JPA y repositorios | Traducen operaciones Java a consultas en Oracle | Dentro del backend |
 | Oracle Cloud | Persiste los datos de la tienda | Oracle Cloud, no AWS |
 | RabbitMQ | Transporta eventos y los entrega a consumidores; mantiene DLQ | EC2 dedicada; tres contenedores |
-| Terraform | Describe y crea la EC2 RabbitMQ, su disco, IAM y seguridad | Se ejecuta desde tu computador |
+| Terraform | Crea VPC, IGW, subred publica, rutas, grupos de seguridad y EC2 RabbitMQ con disco/IAM | Se ejecuta desde tu computador |
 | SSM | Permite administrar EC2 sin abrir SSH y almacenar parametros | AWS |
 | ALB interno | Distribuye llamadas al Backend o al BFF segun la ruta | AWS, dentro de la VPC |
 | API Gateway | Punto de entrada HTTPS para las APIs | AWS |
@@ -80,6 +80,8 @@ RabbitMQ tampoco toleran la perdida de su unica EC2.
 
 Usar una region, por ejemplo us-east-1, y una sola VPC para esta arquitectura.
 El ALB requiere subnets en al menos dos zonas de disponibilidad.
+Terraform crea una sola subred publica; agregar una segunda en otra AZ de la
+misma VPC antes de crear el ALB.
 Backend y RabbitMQ necesitan salida para paquetes, Azure, AWS y Oracle.
 Una subnet privada requiere NAT o la conectividad/endpoints apropiados;
 no basta con desactivar la IP publica.
@@ -115,15 +117,27 @@ requieren tambien el session token; no basta con access key y secret key.
 No pegues claves en el chat, Git ni terraform.tfvars.
 
 En AWS Academy/Learner Lab, revisar restricciones antes de aplicar: el
-Terraform actual crea roles IAM y usa iam:PassRole. Si el laboratorio no lo
-permite, hay que adaptar el modulo a un instance profile existente autorizado.
+Terraform puede reutilizar un perfil existente autorizado, evitando iam:CreateRole:
+
+```hcl
+existing_instance_profile_name = "LabInstanceProfile"
+```
+
+Usar ese nombre solo si existe en tu laboratorio. El perfil debe permitir SSM y
+leer/descifrar los parametros RabbitMQ; el usuario sigue necesitando iam:PassRole.
+En ese modo Terraform no crea ni modifica roles, perfiles o politicas IAM.
+Sin ese input (o con null), crea su rol propio con permisos limitados al proyecto.
 No intentar sustituir esa limitacion con credenciales root o permisos excesivos.
 
 ## 5. Preparar red, permisos y una EC2 de aplicacion
 
-Crear/reutilizar VPC y subnets. Anotar sus IDs y los security groups.
-Crear una EC2 Amazon Linux 2023 x86_64 para los JAR, con capacidad suficiente
+La VPC y la subred publica las crea Terraform en el paso 6. Preparar ahora los
+permisos y, despues de aplicar ese paso, consultar `vpc_id`, `public_subnet_id`
+y `backend_security_group_id` en sus outputs. Ya no se usan IDs de redes existentes.
+Crear entonces una EC2 Amazon Linux 2023 x86_64 para los JAR, con capacidad suficiente
 para ambos JVM; t3.medium es un punto de partida de demo, no una garantia de capacidad.
+Usar la subred y el grupo del backend creados por Terraform. Para el ALB agregar
+una segunda subred en otra AZ de esa misma VPC; no se crea automaticamente.
 
 Reglas de entrada sugeridas:
 
@@ -131,7 +145,7 @@ Reglas de entrada sugeridas:
 | --- | --- |
 | sg-vpclink | Sin entrada arbitraria; salida al ALB |
 | sg-alb | TCP 80 desde sg-vpclink, para integracion privada HTTP |
-| sg-app | TCP 8082 y 8084 solo desde sg-alb |
+| sg-app (backend_security_group_id de Terraform) | Agregar TCP 8082 y 8084 solo desde sg-alb; inicialmente no tiene entrada |
 | SG RabbitMQ creado por Terraform | TCP 5672, 5673 y 5674 desde sg-app |
 | Dashboard RabbitMQ | Sin regla publica; esta enlazado a loopback |
 
@@ -153,7 +167,9 @@ Crear un rol de instancia distinto del de RabbitMQ, con:
 
 Los permisos del usuario que despliega y del rol de la EC2 son distintos.
 El rol de RabbitMQ tiene una denegacion explicita para otros parametros;
-no reutilizarlo para leer secretos de la aplicacion.
+en modo IAM propio no reutilizarlo para leer secretos de la aplicacion. Si se
+reutiliza LabInstanceProfile, sus permisos existentes son externos al modulo:
+no asumir que tiene esa denegacion ni modificar el rol del laboratorio.
 
 Comprobar que la instancia aparece online en Systems Manager y abrir una sesion.
 Si no aparece, revisar rol, agente SSM, DNS, salida HTTPS y rutas de la subnet.
@@ -174,8 +190,6 @@ Completar terraform.tfvars a partir del ejemplo. No poner secretos en el archivo
 ```hcl
 aws_account_id = "<ID_REAL_DE_12_DIGITOS>"
 aws_region = "us-east-1"
-subnet_id = "<SUBNET_REAL>"
-backend_security_group_ids = ["<SG_REAL_DE_LA_EC2_APP>"]
 
 project_name = "punto-gamer"
 environment = "dev"
@@ -184,19 +198,27 @@ volume_size_gib = 40
 associate_public_ip_address = true
 ```
 
-subnet_id es la subnet donde se creara la EC2 RabbitMQ; debe estar en la
-misma VPC que sg-app y tener salida adecuada para su arranque.
+Terraform crea VPC 10.0.0.0/16, subred publica 10.0.1.0/24, IGW y ruta
+0.0.0.0/0. La EC2 referencia directamente aws_subnet.public.id. Mantener la IP
+publica habilitada: no se crea NAT. Esto no abre puertos de entrada en RabbitMQ.
+La zona se selecciona entre las habilitadas que ofrecen instance_type; se puede
+fijar con availability_zone = "us-east-1a", siempre que AWS la ofrezca para tu cuenta.
+Se requieren ec2:DescribeAvailabilityZones y ec2:DescribeInstanceTypeOfferings.
+Fijar la zona del output despues del primer despliegue evita que una nueva oferta
+cambie la seleccion automatica. Las ofertas no garantizan capacidad libre.
+Eliminar subnet_id y backend_security_group_ids de tfvars antiguos: esos inputs
+fueron reemplazados por recursos de la nueva VPC.
 
 ```powershell
 cd C:\Users\rorro\Desktop\CloudNative\infra\terraform
-Copy-Item terraform.tfvars.example terraform.tfvars
-# Editar terraform.tfvars con los IDs reales antes de seguir.
+if (-not (Test-Path terraform.tfvars)) { Copy-Item terraform.tfvars.example terraform.tfvars }
+# Comprobar cuenta y region de terraform.tfvars antes de seguir.
 terraform init
 terraform validate
-terraform plan -out=deployment.tfplan
-terraform show deployment.tfplan
+terraform plan -out=network.tfplan
+terraform show network.tfplan
 # Ejecutar solo despues de revisar cuenta, recursos y costos:
-terraform apply deployment.tfplan
+terraform apply network.tfplan
 terraform output
 ```
 
@@ -205,6 +227,17 @@ plan propone cambios sin aplicarlos. apply crea/modifica recursos.
 El estado registra los recursos administrados: protegerlo y conservarlo.
 Un tfplan guardado puede incluir informacion sensible; no subirlo a Git.
 No volver a copiar el ejemplo sobre una configuracion local ya completada.
+No aplicar un deployment.tfplan anterior: sigue usando la configuracion antigua.
+Si se configura LabInstanceProfile despues de un error iam:CreateRole, generar
+un plan nuevo (por ejemplo lab.tfplan) y comprobar que ya no crea recursos IAM.
+Conservar el estado del apply parcial: la red ya creada no necesita destruirse.
+Si ya existia una EC2 administrada, la nueva subred requiere reemplazarla.
+Respaldar los datos RabbitMQ antes de aprobar cualquier reemplazo; las EC2
+existentes no se migran automaticamente a la nueva VPC.
+Si AWS rechaza t3.medium en la zona de la subred, cambiar availability_zone a una
+compatible y generar otro plan (por ejemplo zone.tfplan). Esto reemplaza la subred
+y su asociacion, no mueve recursos existentes. No aplicar si otras EC2/ALB usan
+esa subred sin preparar primero su migracion. No reducir RAM para evitar este error.
 
 La EC2 puede aparecer running antes de que RabbitMQ haya terminado de instalarse.
 Entrar por SSM y comprobar:
@@ -612,7 +645,8 @@ Antes de presentar el sistema como completo, considerar:
 - No hay que interpretar los tests de JWT con H2/JWKS local como pruebas reales
   de Oracle, Azure, SMTP o tolerancia a fallos del cluster.
 - La base Angular no reemplaza todas las pantallas de la tienda React.
-- Terraform no crea aun EC2 app, ALB, Gateway, S3/CloudFront o la VPC.
+- Terraform crea la VPC y una subred publica, pero no EC2 app, ALB, Gateway
+  o S3/CloudFront. Para el ALB falta otra subred en una AZ diferente.
 
 No hace falta solucionar estos puntos para comprobar que los procesos arrancan,
 pero si deben resolverse o declararse para una entrega funcional completa.
@@ -622,7 +656,9 @@ pero si deben resolverse o declararse para una entrega funcional completa.
 | Sintoma | Revisar |
 | --- | --- |
 | InvalidClientTokenId / ExpiredToken | Sesion AWS, token temporal y perfil activo |
-| Terraform AccessDenied en IAM | Restricciones de cuenta/Learner Lab y roles permitidos |
+| Terraform AccessDenied en IAM | Para CreateRole, configurar un existing_instance_profile_name autorizado; PassRole y lectura SSM/KMS deben seguir permitidos |
+| EC2 Unsupported en Availability Zone | Elegir availability_zone compatible y revisar el reemplazo de subred; consultar las ofertas del tipo EC2 |
+| Docker no instalado y cloud-init muestra conflicto curl-minimal/curl | El script inicial fallo al instalar paquetes; usar el procedimiento de reparacion en infra/terraform/README.md sin recrear EC2 |
 | EC2 no aparece en SSM | Agente, instance profile, DNS y salida 443 |
 | RabbitMQ no inicia | SecureString, cookie/password, cloud-init y recursos de la EC2 |
 | AMQP connection refused / timeout | IP privada, puerto, SG y estado de contenedores |

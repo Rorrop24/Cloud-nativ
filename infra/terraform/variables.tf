@@ -19,6 +19,30 @@ variable "aws_region" {
   }
 }
 
+variable "existing_instance_profile_name" {
+  description = "Perfil IAM existente y autorizado para EC2. Null crea uno propio; usar LabInstanceProfile en el laboratorio."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.existing_instance_profile_name == null ? true : can(regex("^[A-Za-z0-9_+=,.@-]{1,128}$", var.existing_instance_profile_name))
+    error_message = "Indica el nombre del instance profile, no un ARN ni una ruta, o deja null."
+  }
+}
+
+variable "availability_zone" {
+  description = "Zona habilitada que ofrece instance_type. Null selecciona una compatible; fijar el valor evita cambios futuros de subred."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.availability_zone == null ? true : can(regex("^${var.aws_region}[a-z]$", var.availability_zone))
+    error_message = "Indica una zona estandar de aws_region, por ejemplo us-east-1a, o deja null."
+  }
+}
+
 variable "project_name" {
   description = "Prefijo de nombres y etiquetas."
   type        = string
@@ -38,27 +62,6 @@ variable "environment" {
   validation {
     condition     = contains(["dev", "test", "prod"], var.environment)
     error_message = "Los entornos validos son dev, test y prod."
-  }
-}
-
-variable "subnet_id" {
-  description = "Subnet existente para la EC2. Debe tener salida a Internet para el arranque."
-  type        = string
-
-  validation {
-    condition     = can(regex("^subnet-([0-9a-f]{8}|[0-9a-f]{17})$", var.subnet_id))
-    error_message = "Indica un ID de subnet AWS valido."
-  }
-}
-
-variable "backend_security_group_ids" {
-  description = "Security groups del backend autorizados a usar los puertos AMQP privados."
-  type        = set(string)
-  default     = []
-
-  validation {
-    condition     = alltrue([for id in var.backend_security_group_ids : can(regex("^sg-([0-9a-f]{8}|[0-9a-f]{17})$", id))])
-    error_message = "Cada elemento debe ser un ID de security group AWS valido."
   }
 }
 
@@ -86,7 +89,7 @@ variable "ami_id" {
 }
 
 variable "associate_public_ip_address" {
-  description = "Asignar IP publica para salida desde una subnet publica. No habilita acceso entrante."
+  description = "IP publica para salida por el IGW. Desactivar requiere agregar NAT/endpoints; no habilita entrada."
   type        = bool
   default     = true
 }

@@ -2,7 +2,8 @@
 set -euo pipefail
 umask 077
 
-dnf install -y docker awscli-2 python3 curl
+# AL2023 trae curl-minimal; instalar curl completo provoca un conflicto de paquetes.
+dnf install -y docker awscli-2 python3 curl-minimal
 systemctl enable --now docker amazon-ssm-agent
 
 install -d -m 0755 /usr/local/lib/docker/cli-plugins
