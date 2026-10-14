@@ -15,10 +15,9 @@ public interface ProductoRepository extends JpaRepository<Producto, String> {
 
     Optional<Producto> findByNombre(String nombre);
 
-    @Query(value = "SELECT * FROM productos WHERE destacado = 1 AND ROWNUM <= 3", nativeQuery = true)
-    List<Producto> findTop3Destacados();
+    List<Producto> findTop3ByDestacadoTrueOrderByIdAsc();
 
-    // Descuenta stock atómicamente evitando valores negativos en Oracle
+    // Descuenta stock atomicamente evitando valores negativos.
     @Modifying
     @Transactional
     @Query("UPDATE Producto p SET p.stock = p.stock - :cantidad WHERE p.id = :id AND p.stock >= :cantidad")

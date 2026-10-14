@@ -8,6 +8,14 @@ aws_region     = "us-east-1"
 # Omitir para elegir una zona compatible; luego fijarla usando el output availability_zone.
 # availability_zone = "us-east-1a"
 
+# RDS MySQL privado. La password se genera y guarda en SSM, nunca en este archivo.
+enable_database = true
+enable_application = false # Deploy-Project.ps1 lo habilita tras construir los artefactos.
+# application_release_bucket_name = "mi-bucket-privado" # Opcional; el wrapper prepara uno en Learner Lab.
+enable_cdn = false         # Learner Lab: web HTTPS por API Gateway, sin CloudFront.
+# database_instance_class = "db.t3.micro"
+# database_deletion_protection = true
+
 project_name                = "punto-gamer"
 environment                 = "dev"
 instance_type               = "t3.medium"

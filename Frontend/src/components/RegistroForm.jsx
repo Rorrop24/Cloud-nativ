@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import regionesData from "../data/regiones.json";
 import Swal from "sweetalert2"; 
 import "sweetalert2/dist/sweetalert2.min.css"; 
+import { API_USUARIOS } from "../utils/apihelper";
 
 
 export default function RegistroForm({ onClose, onUsuarioChange, abrirLogin }) {
@@ -129,7 +130,7 @@ export default function RegistroForm({ onClose, onUsuarioChange, abrirLogin }) {
 
     // Enviar al backend (Spring Boot)
     try {
-      const res = await fetch("http://localhost:8082/v2/usuarios/crear", {
+      const res = await fetch(`${API_USUARIOS}/crear`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(nuevoUsuario)

@@ -1,0 +1,1 @@
+Fictional archive used only by Terraform mocked tests. Never deploy this fixture.

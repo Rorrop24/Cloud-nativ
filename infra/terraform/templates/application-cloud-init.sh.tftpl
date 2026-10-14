@@ -1,0 +1,97 @@
+#!/bin/bash
+set -euo pipefail
+umask 077
+dnf install -y docker awscli-2 python3 curl-minimal unzip
+systemctl enable --now docker amazon-ssm-agent
+install -d -m 0755 /usr/local/lib/docker/cli-plugins
+curl --fail --location --retry 5 --proto '=https' --proto-redir '=https' \
+  https://github.com/docker/compose/releases/download/v5.6.0/docker-compose-linux-x86_64 \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+echo '40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a  /usr/local/lib/docker/cli-plugins/docker-compose' | sha256sum --check --status
+chmod 0755 /usr/local/lib/docker/cli-plugins/docker-compose
+curl --fail --location --retry 5 --proto '=https' --proto-redir '=https' \
+  https://github.com/docker/buildx/releases/download/v0.38.0/buildx-v0.38.0.linux-amd64 \
+  -o /usr/local/lib/docker/cli-plugins/docker-buildx
+echo '4fe4cc38adf48169132749b6ca22a990928db0118e3407584ee553723115d287  /usr/local/lib/docker/cli-plugins/docker-buildx' | sha256sum --check --status
+chmod 0755 /usr/local/lib/docker/cli-plugins/docker-buildx
+docker buildx version
+install -d -m 0700 /etc/punto-gamer /opt/punto-gamer/application
+printf '%s' '${config_base64}' | base64 --decode > /etc/punto-gamer/deployment.json
+
+cat > /usr/local/sbin/punto-gamer-application-start <<'START'
+#!/bin/bash
+set -euo pipefail
+umask 077
+cd /opt/punto-gamer/application
+configuration=/etc/punto-gamer/deployment.json
+region=$(python3 -c 'import json; print(json.load(open("/etc/punto-gamer/deployment.json"))["region"])')
+artifact=$(python3 -c 'import json; c=json.load(open("/etc/punto-gamer/deployment.json")); print("s3://"+c["artifact_bucket"]+"/"+c["artifact_key"])')
+expected=$(python3 -c 'import json; print(json.load(open("/etc/punto-gamer/deployment.json"))["artifact_sha256"])')
+aws s3 cp "$artifact" release.zip --region "$region" --only-show-errors
+printf '%s  release.zip\n' "$expected" | sha256sum --check --status
+python3 - <<'PY'
+import zipfile
+from pathlib import PurePosixPath
+with zipfile.ZipFile("release.zip") as archive:
+    for item in archive.infolist():
+        path = PurePosixPath(item.filename)
+        if path.is_absolute() or ".." in path.parts or "\\" in item.filename:
+            raise SystemExit("ZIP con rutas no permitidas")
+PY
+unzip -oq release.zip
+find Frontend/dist -type d -exec chmod 0755 {} +
+find Frontend/dist -type f -exec chmod 0644 {} +
+rm -f release.zip
+secret_file=$(mktemp)
+trap 'rm -f "$secret_file"' EXIT
+mapfile -t names < <(python3 -c 'import json; c=json.load(open("/etc/punto-gamer/deployment.json")); print(c["database_password_path"]); print(c["rabbit_password_path"])')
+aws ssm get-parameters --region "$region" --with-decryption \
+  --names "$${names[@]}" --output json > "$secret_file"
+python3 write-application-env.py "$configuration" "$secret_file" /etc/punto-gamer
+install -d -m 0750 -o 10001 -g 10001 /opt/punto-gamer/application/data
+python3 - <<'PY'
+import json
+import socket
+import time
+config = json.load(open("/etc/punto-gamer/deployment.json"))
+addresses = config["backend"]["RABBITMQ_ADDRESSES"].split(",")
+for attempt in range(120):
+    try:
+        for address in addresses:
+            host, port = address.rsplit(":", 1)
+            with socket.create_connection((host, int(port)), timeout=3):
+                pass
+        break
+    except OSError:
+        if attempt == 119:
+            raise SystemExit("RabbitMQ aun no disponible; systemd reintentara")
+        time.sleep(5)
+PY
+docker compose -f compose.yml up -d --build --wait --wait-timeout 300
+curl --fail --silent http://127.0.0.1:8080/v2/productos/todos >/dev/null
+START
+chmod 0700 /usr/local/sbin/punto-gamer-application-start
+
+cat > /etc/systemd/system/punto-gamer-application.service <<'UNIT'
+[Unit]
+Description=Punto Gamer Backend BFF y proxy
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/punto-gamer/application
+ExecStart=/usr/local/sbin/punto-gamer-application-start
+ExecStop=/usr/bin/docker compose -f compose.yml stop
+TimeoutStartSec=1800
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now punto-gamer-application.service

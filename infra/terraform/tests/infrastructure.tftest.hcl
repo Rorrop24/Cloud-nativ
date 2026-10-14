@@ -52,6 +52,8 @@ variables {
   aws_account_id                 = "123456789012"
   existing_instance_profile_name = null
   availability_zone              = null
+  enable_database                = false
+  database_password              = "PasswordForTestsOnly0123456789ABCD"
 }
 
 # apply usa SOLO el proveedor simulado; resuelve IDs para probar las referencias.

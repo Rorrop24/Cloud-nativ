@@ -1,8 +1,15 @@
 # Terraform - Punto Gamer
 
-Esta configuracion crea una red nueva y una EC2 dedicada a RabbitMQ.
-No despliega el frontend ni la EC2 del backend. Si ya hay recursos administrados
-por este estado, mover la EC2 a la nueva subred requiere reemplazarla: revisar el plan.
+Esta configuracion crea una red nueva, una EC2 dedicada a RabbitMQ y,
+con `enable_database = true`, una base RDS MySQL privada sin wallet.
+Para incorporar RDS al despliegue existente sigue [la guia MySQL](../../docs/aws-mysql.md)
+y `infra/deploy/Deploy-Database.ps1`; no ejecutes un apply completo sin revisar
+el posible reemplazo de la EC2 por el cambio previo de user_data.
+Con `enable_application = true` despliega tambien React, Backend/BFF en Docker,
+API Gateway y ALB interno. Usar [la guia completa](../../docs/aws-despliegue-completo.md)
+y `infra/deploy/Deploy-Project.ps1`, que compila y carga la password efimera de RDS.
+CloudFront es opcional; Learner Lab usa HTTPS de API Gateway por defecto.
+Mover una EC2 a otra subred o cambiar user_data requiere reemplazo: revisar el plan.
 
 ## Que incluye
 
@@ -22,13 +29,15 @@ por este estado, mover la EC2 a la nueva subred requiere reemplazarla: revisar e
 - Rol IAM propio para SSM/secretos, o reutilizacion de un instance profile
   autorizado en AWS Academy sin crear ni modificar recursos IAM.
 - Servicio systemd que inicia el cluster y comprueba sus tres nodos al arrancar.
+- RDS MySQL opcional: dos subredes privadas, acceso 3306 solo desde el backend,
+  cifrado, TLS obligatorio, backups y proteccion de borrado.
 
 Los tres contenedores comparten una EC2: pueden tolerar la perdida de un nodo
 RabbitMQ con colas quorum, pero no la caida de la instancia completa.
 
 ## Validacion local
 
-Terraform 1.10 o superior. Estos comandos descargan el proveedor y validan con
+Terraform 1.11 o superior. Estos comandos descargan el proveedor y validan con
 AWS simulado; no necesitan credenciales ni crean recursos:
 
 ```powershell
@@ -41,6 +50,11 @@ terraform test
 
 El archivo `.terraform.lock.hcl` se versiona para fijar el proveedor. El estado,
 los planes y los archivos `.tfvars` locales se excluyen con `.gitignore`.
+Las pruebas no acceden a AWS; usan credenciales ficticias. Con RDS activado, un
+plan real requiere cargar la password efimera mediante el script de despliegue.
+Los comandos generales de las siguientes secciones son para los modulos opcionales
+deshabilitados. Tras incorporar RDS/aplicacion, usar el script completo, no desactivar
+modulos para evitar prompts: hacerlo puede proponer eliminar recursos.
 
 ## Conectar despues a AWS
 
@@ -179,7 +193,8 @@ subnet_id = aws_subnet.public.id
 
 El grupo de RabbitMQ usa `vpc_id = aws_vpc.main.id`, no una VPC externa.
 La instancia espera la asociacion de rutas y las reglas de salida antes de arrancar.
-Esta red contiene una sola subred; un ALB regional necesitara una segunda en otra AZ.
+Esta red contiene una sola subred publica; un ALB regional necesitara una segunda
+subred apropiada en otra AZ. Las subredes privadas de RDS no deben usarse para el ALB.
 
 ## Conectar el backend
 

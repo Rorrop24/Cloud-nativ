@@ -15,7 +15,7 @@ public class ProductoService {
     private ProductoRepository repository;
     
     public List<Producto> getProductosDestacados() {
-        return repository.findTop3Destacados();
+        return repository.findTop3ByDestacadoTrueOrderByIdAsc();
     }
 
     public Producto guardarProducto(Producto p) {

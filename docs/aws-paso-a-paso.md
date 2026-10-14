@@ -1,5 +1,14 @@
 # Punto Gamer: guia de despliegue AWS paso a paso
 
+**Despliegue automatizado actual:** seguir [aws-despliegue-completo.md](aws-despliegue-completo.md).
+El modo Learner Lab publica React por la URL HTTPS de API Gateway; CloudFront es opcional.
+Esta guia extensa conserva tambien pasos manuales y la alternativa anterior.
+
+**Actualizacion de base de datos:** ahora se incorporo RDS MySQL sin wallet.
+Sigue [aws-mysql.md](aws-mysql.md) para crearlo y activar el perfil `aws` del backend.
+Las instrucciones Oracle de esta guia son la alternativa anterior; no se necesitan
+para MySQL. Azure Entra ID sigue siendo el proveedor de identidad.
+
 Esta guia explica el proyecto y el camino para desplegarlo. Sus comandos son
 instrucciones para ejecutar despues: no se han creado recursos AWS al escribirla.
 
@@ -13,10 +22,11 @@ instrucciones para ejecutar despues: no se han creado recursos AWS al escribirla
 | Azure Entra ID | Autentica a las personas y emite tokens firmados | Azure, no EC2 |
 | BffJava/ | Valida JWT, agrega catalogo y reenvia el bearer al backend | EC2, puerto 8084 |
 | Backend/ | API de negocio, autorizacion, usuarios, productos, boletas y eventos | EC2, puerto 8082 |
-| JPA y repositorios | Traducen operaciones Java a consultas en Oracle | Dentro del backend |
-| Oracle Cloud | Persiste los datos de la tienda | Oracle Cloud, no AWS |
+| JPA y repositorios | Traducen operaciones Java a consultas en MySQL (perfil aws) u Oracle | Dentro del backend |
+| RDS MySQL | Nueva persistencia sin wallet | AWS, privada en la VPC |
+| Oracle Cloud | Persistencia anterior conservada, no necesaria en perfil aws | Oracle Cloud |
 | RabbitMQ | Transporta eventos y los entrega a consumidores; mantiene DLQ | EC2 dedicada; tres contenedores |
-| Terraform | Crea VPC, IGW, subred publica, rutas, grupos de seguridad y EC2 RabbitMQ con disco/IAM | Se ejecuta desde tu computador |
+| Terraform | Crea red, grupos de seguridad, EC2 RabbitMQ y RDS MySQL opcional | Se ejecuta desde tu computador |
 | SSM | Permite administrar EC2 sin abrir SSH y almacenar parametros | AWS |
 | ALB interno | Distribuye llamadas al Backend o al BFF segun la ruta | AWS, dentro de la VPC |
 | API Gateway | Punto de entrada HTTPS para las APIs | AWS |
@@ -25,10 +35,9 @@ instrucciones para ejecutar despues: no se han creado recursos AWS al escribirla
 El BFF Node de bff-service/ no es el que debes usar como entrada segura.
 Conservamos ese codigo anterior; la implementacion JWT nueva esta en BffJava/.
 
-"Todo en AWS" aqui significa desplegar la aplicacion y RabbitMQ en AWS.
-Azure sigue siendo el proveedor de identidad y Oracle la base de datos.
-Migrar esos dos servicios a Cognito/RDS seria otra tarea, no una configuracion
-equivalente del codigo actual.
+La aplicacion, RabbitMQ y la nueva base MySQL se despliegan en AWS.
+Azure sigue siendo el proveedor de identidad; no se cambia a Cognito.
+Los datos existentes en Oracle no se trasladan automaticamente a RDS.
 
 ## 2. Como viaja una solicitud
 
@@ -40,7 +49,7 @@ equivalente del codigo actual.
 6. El ALB manda /api/bff/* al BFF y /v2/* o /api/* al backend.
 7. Cada servicio Java comprueba firma, expiracion, issuer y audience.
 8. Spring comprueba scopes/roles; para datos personales tambien comprueba propiedad.
-9. El backend usa Oracle y publica eventos RabbitMQ segun la operacion.
+9. El backend usa RDS MySQL con el perfil aws y publica eventos RabbitMQ.
 
 React conserva acceso publico GET al catalogo. El catalogo agregado del BFF
 requiere una sesion con Pedidos.Read o Rabbit.Admin.
@@ -63,7 +72,7 @@ Internet
         ALB interno
           |
         EC2 aplicacion
-          +-- Backend Java :8082 ---- Oracle Cloud
+          +-- Backend Java :8082 ---- RDS MySQL privado
           +-- BFF Java :8084
           |
         EC2 RabbitMQ
@@ -96,7 +105,7 @@ configura un presupuesto y revisa creditos antes de aplicar.
 1. Instalar JDK 17+; el proyecto se verifico con JDK 21.
 2. Usar Node compatible con cada package.json; Node 24.15+ de la rama 24 sirve
    para la base Angular actual.
-3. Instalar Terraform 1.10+ y AWS CLI v2.
+3. Instalar Terraform 1.11+ y AWS CLI v2.
 4. Instalar Session Manager Plugin para las sesiones y los tuneles.
 5. Configurar una sesion AWS del proyecto, preferiblemente con credenciales
    temporales/SSO. No usar las credenciales del usuario root.

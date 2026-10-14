@@ -39,6 +39,11 @@ yarn-error.log*
 *.tfplan
 *.tfvars
 *.tfvars.json
+infra/terraform/database-plan-metadata.json
+infra/deploy/tests/__pycache__/
+infra/deploy/__pycache__/
+infra/.deploy/
+infra/terraform/project-plan-metadata.json
 crash.log
 crash.*.log
 *.hcl.local

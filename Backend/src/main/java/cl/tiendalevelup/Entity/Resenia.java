@@ -21,7 +21,8 @@ public class Resenia {
     @JoinColumn(name = "usuario_id", referencedColumnName = "usuarioId", nullable = false)
     private Usuario usuario;
 
-    @Column(columnDefinition = "CLOB", nullable = false)
+    @Lob
+    @Column(nullable = false)
     private String texto;
 
     @Column(nullable = false)

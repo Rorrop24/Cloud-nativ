@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-const API_USUARIOS = "http://localhost:8082/v2/usuarios";
+import { API_USUARIOS } from "../utils/apihelper";
 
 export default function LoginForm({ onClose, onUsuarioChange }) {
   const [email, setEmail] = useState("");

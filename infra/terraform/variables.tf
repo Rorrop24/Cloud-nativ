@@ -159,3 +159,71 @@ variable "secrets_kms_key_arn" {
     error_message = "Indica el ARN de una clave KMS o deja null."
   }
 }
+
+variable "enable_database" {
+  description = "Crear RDS MySQL privado para el backend. Genera costos; no migra datos de Oracle."
+  type        = bool
+  default     = false
+}
+
+variable "database_name" {
+  type    = string
+  default = "punto_gamer"
+
+  validation {
+    condition     = can(regex("^[A-Za-z][A-Za-z0-9_]{0,63}$", var.database_name))
+    error_message = "Usa un nombre de base MySQL valido de hasta 64 caracteres."
+  }
+}
+
+variable "database_username" {
+  description = "Usuario inicial para crear el esquema. Separar migraciones y usuario limitado en produccion."
+  type        = string
+  default     = "punto_gamer"
+
+  validation {
+    condition     = can(regex("^[A-Za-z][A-Za-z0-9_]{0,15}$", var.database_username)) && !contains(["root", "admin", "mysql", "rdsadmin"], lower(var.database_username))
+    error_message = "Usa un usuario MySQL de hasta 16 caracteres que no este reservado."
+  }
+}
+
+variable "database_instance_class" {
+  type    = string
+  default = "db.t3.micro"
+
+  validation {
+    condition     = contains(["db.t3.micro", "db.t3.small", "db.t4g.micro", "db.t4g.small"], var.database_instance_class)
+    error_message = "Usa una clase micro o small t3/t4g; su disponibilidad se consulta antes de crear RDS."
+  }
+}
+
+variable "database_password_version" {
+  description = "Version write-only de la password. No modificar sin un procedimiento de rotacion RDS/SSM/backend."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.database_password_version >= 1 && floor(var.database_password_version) == var.database_password_version
+    error_message = "La version de password debe ser un entero positivo."
+  }
+}
+
+variable "database_password" {
+  description = "Credencial efimera cargada desde SSM por Deploy-Database.ps1; no escribir en tfvars ni mostrar en consola."
+  type        = string
+  sensitive   = true
+  ephemeral   = true
+  nullable    = true
+  default     = null
+
+  validation {
+    condition     = var.enable_database ? (var.database_password == null ? false : can(regex("^[A-Za-z0-9]{32,41}$", var.database_password))) : true
+    error_message = "Ejecuta infra/deploy/Deploy-Database.ps1 para cargar la credencial segura de RDS desde SSM."
+  }
+}
+
+variable "database_deletion_protection" {
+  description = "Protege la BD ante destroy; desactivar solo tras respaldar y revisar el plan."
+  type        = bool
+  default     = true
+}

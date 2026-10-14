@@ -65,3 +65,39 @@ output "backend_security_group_id" {
   description = "Grupo para asociar a la EC2 del backend en esta VPC; no permite entrada por defecto."
   value       = aws_security_group.backend.id
 }
+
+output "database_environment" {
+  description = "Conexion MySQL sin wallet. Leer la password desde SSM en la EC2; nunca publicarla."
+  value = var.enable_database ? {
+    SPRING_PROFILES_ACTIVE = "aws"
+    DB_URL                 = "jdbc:mysql://${aws_db_instance.mysql[0].address}:3306/${var.database_name}?sslMode=VERIFY_IDENTITY&serverTimezone=UTC&characterEncoding=UTF-8"
+    DB_USERNAME            = var.database_username
+    DB_PASSWORD_PATH       = local.database_password_path
+  } : null
+}
+
+output "database_endpoint" {
+  description = "Endpoint privado RDS; no es accesible directamente desde Internet."
+  value       = var.enable_database ? aws_db_instance.mysql[0].address : null
+}
+
+output "website_url" {
+  description = "React y API bajo el mismo dominio HTTPS; registrar esta URL como Redirect URI SPA en Azure."
+  value       = var.enable_application ? (local.cdn_enabled ? "https://${aws_cloudfront_distribution.frontend[0].domain_name}" : aws_apigatewayv2_api.application[0].api_endpoint) : null
+}
+
+output "application_instance_id" {
+  value = var.enable_application ? aws_instance.application[0].id : null
+}
+
+output "application_target_group_arn" {
+  value = var.enable_application ? aws_lb_target_group.application[0].arn : null
+}
+
+output "api_url" {
+  value = var.enable_application ? aws_apigatewayv2_api.application[0].api_endpoint : null
+}
+
+output "application_session_command" {
+  value = var.enable_application ? "aws ssm start-session --region ${var.aws_region} --target ${aws_instance.application[0].id}" : null
+}

@@ -1,0 +1,2 @@
+infra/terraform/templates/*.tftpl text eol=lf
+infra/deploy/*.sh text eol=lf
