@@ -26,10 +26,10 @@
 		<tag/>
 		<url/>
 	</scm>
-	<properties>
+	<properties><project.build.outputTimestamp>2026-10-14T00:00:00Z</project.build.outputTimestamp>
 		<java.version>17</java.version>
 	</properties>
-	<dependencies>
+	<dependencies><dependency><groupId>cl.puntogamer</groupId><artifactId>messaging-common</artifactId><version>1.0.0</version></dependency>
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
@@ -126,10 +126,6 @@
 			<groupId>com.oracle.database.security</groupId>
 			<artifactId>osdt_cert</artifactId>
 			<version>19.8.0.0</version>
-		</dependency>	
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-amqp</artifactId>
 		</dependency>	
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

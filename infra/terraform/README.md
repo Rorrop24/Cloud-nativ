@@ -5,8 +5,8 @@ con `enable_database = true`, una base RDS MySQL privada sin wallet.
 Para incorporar RDS al despliegue existente sigue [la guia MySQL](../../docs/aws-mysql.md)
 y `infra/deploy/Deploy-Database.ps1`; no ejecutes un apply completo sin revisar
 el posible reemplazo de la EC2 por el cambio previo de user_data.
-Con `enable_application = true` despliega tambien React, Backend/BFF en Docker,
-API Gateway y ALB interno. Usar [la guia completa](../../docs/aws-despliegue-completo.md)
+Con `enable_application = true` despliega Angular y los seis servicios Java en Docker,
+API Gateway y ALB interno. Usar [la guia completa](../../docs/EP2-puesta-en-marcha.md)
 y `infra/deploy/Deploy-Project.ps1`, que compila y carga la password efimera de RDS.
 CloudFront es opcional; Learner Lab usa HTTPS de API Gateway por defecto.
 Mover una EC2 a otra subred o cambiar user_data requiere reemplazo: revisar el plan.

@@ -66,7 +66,7 @@ try {
     $archive = Join-Path $artifactDirectory 'application.zip'
     [IO.File]::WriteAllText($archive, 'Fictional archive')
     [IO.File]::WriteAllText((Join-Path $frontend 'index.html'), 'Test')
-    $manifest = @{ artifact_path = $archive; artifact_sha256 = (Get-FileHash $archive -Algorithm SHA256).Hash;
+    $manifest = @{ release_schema = 2; artifact_path = $archive; artifact_sha256 = (Get-FileHash $archive -Algorithm SHA256).Hash;
         frontend_path = $frontend; frontend_sha256 = Get-FrontendFingerprint $frontend }
     [IO.File]::WriteAllText((Join-Path $artifactDirectory 'artifacts.json'), ($manifest | ConvertTo-Json))
     $scriptPath = Join-Path $deploy 'Deploy-Project.ps1'

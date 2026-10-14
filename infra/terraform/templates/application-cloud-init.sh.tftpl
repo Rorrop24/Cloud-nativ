@@ -39,6 +39,8 @@ with zipfile.ZipFile("release.zip") as archive:
             raise SystemExit("ZIP con rutas no permitidas")
 PY
 unzip -oq release.zip
+# Permite que Java lea los JAR al ejecutarse sin root.
+chmod 0644 Backend/target/*.jar BffJava/target/*.jar services/*/target/*.jar
 find Frontend/dist -type d -exec chmod 0755 {} +
 find Frontend/dist -type f -exec chmod 0644 {} +
 rm -f release.zip
@@ -74,7 +76,7 @@ chmod 0700 /usr/local/sbin/punto-gamer-application-start
 
 cat > /etc/systemd/system/punto-gamer-application.service <<'UNIT'
 [Unit]
-Description=Punto Gamer Backend BFF y proxy
+Description=Punto Gamer seis servicios Java y Angular
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service

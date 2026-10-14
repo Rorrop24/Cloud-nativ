@@ -11,7 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import cl.tiendalevelup.Entity.Producto;
 
-public interface ProductoRepository extends JpaRepository<Producto, String> { 
+public interface ProductoRepository extends JpaRepository<Producto, String> {
+    @Query("SELECT p.stock FROM Producto p WHERE p.id = :id")
+    Integer stockActual(@Param("id") String id);
+
 
     Optional<Producto> findByNombre(String nombre);
 

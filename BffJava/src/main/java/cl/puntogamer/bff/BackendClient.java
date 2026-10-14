@@ -11,6 +11,9 @@ import org.springframework.web.client.RestClient;
 @Service
 public class BackendClient {
     private final RestClient client;
+    private RestClient adminClient;
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureAdmin(RestClient.Builder builder,@Value("${app.rabbit-admin-url:http://localhost:8088}")String url){this.adminClient=builder.baseUrl(url).build();}
     private static final ParameterizedTypeReference<List<Map<String, Object>>> ITEMS = new ParameterizedTypeReference<>() {};
 
     public BackendClient(RestClient.Builder builder, @Value("${app.backend-url}") String baseUrl) {
@@ -34,7 +37,7 @@ public class BackendClient {
     }
 
     public Object queue(String name, String token) {
-        return client.get().uri("/api/rabbitmq/queues/{name}", name)
+        return (adminClient==null?client:adminClient).get().uri("/api/rabbitmq/queues/{name}", name)
                 .headers(h -> h.setBearerAuth(token)).retrieve().body(Object.class);
     }
 

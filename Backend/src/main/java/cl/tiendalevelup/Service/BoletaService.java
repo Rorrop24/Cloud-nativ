@@ -1,114 +1,48 @@
 package cl.tiendalevelup.Service;
-
 import cl.tiendalevelup.Entity.*;
 import cl.tiendalevelup.Repository.*;
-
-import org.springframework.beans.factory.annotation.Autowired;
+import java.math.*;
+import java.util.*;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-
+import org.springframework.web.server.ResponseStatusException;
 @Service
 public class BoletaService {
-
-    @Autowired
-    private BoletaRepository boletaRepository;
-
-    @Autowired
-    private UsuarioRepository usuarioRepository;
-
-    @Autowired
-    private ProductoRepository productoRepository;
-
-    @Autowired(required = false)
-    private PedidoProducerService pedidoProducerService;
-
-    @Transactional
-    public Boleta generarBoleta(int usuarioId, List<Map<String, Object>> items) {
-
-        // 1. Validar usuario en Oracle Autonomous Database
-        Usuario usuario = usuarioRepository.findById(usuarioId)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado en base de datos con ID: " + usuarioId));
-
-        if (items == null || items.isEmpty()) {
-            throw new RuntimeException("El carrito recibido está vacío");
+    private final BoletaRepository boletas;private final UsuarioRepository usuarios;private final ProductoRepository productos;private final PedidoProducerService producer;
+    public BoletaService(BoletaRepository boletas,UsuarioRepository usuarios,ProductoRepository productos,PedidoProducerService producer){this.boletas=boletas;this.usuarios=usuarios;this.productos=productos;this.producer=producer;}
+    @Transactional public Boleta generarBoleta(int usuarioId,List<Map<String,Object>> items){return generarBoleta(usuarioId,items,null);}
+    @Transactional public Boleta generarBoleta(int usuarioId,List<Map<String,Object>> items,String requestId){
+        if(requestId!=null){
+            if(requestId.isBlank()||requestId.length()>100)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Clave de compra invalida");
+            var existing=boletas.findByRequestId(requestId);
+            if(existing.isPresent()){if(existing.get().getUsuario().getUsuarioId()!=usuarioId)throw new ResponseStatusException(HttpStatus.FORBIDDEN);return existing.get();}
         }
-
-        // 2. Crear boleta
-        Boleta boleta = new Boleta();
-        boleta.setUsuario(usuario);
-        boleta.setFechaEmision(new Date());
-
-        // Asegurar que la lista de detalles no sea nula
-        if (boleta.getDetalles() == null) {
-            boleta.setDetalles(new ArrayList<>());
+        var user=usuarios.findById(usuarioId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Usuario no encontrado"));
+        if(items==null||items.isEmpty()||items.size()>100)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Carrito vacio o demasiado grande");
+        var quantities=new TreeMap<String,Integer>();
+        for(var item:items){
+            Object value=item.get("cantidad");String id=Objects.toString(item.get("productoId"),"");
+            if(id.isBlank()||!(value instanceof Number number)||number.doubleValue()!=number.intValue()||number.intValue()<1||number.intValue()>100)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Producto o cantidad invalidos");
+            quantities.merge(id,((Number)value).intValue(),Integer::sum);
         }
-
-        double total = 0;
-
-        for (Map<String, Object> item : items) {
-            String productoId = String.valueOf(item.get("productoId"));
-            
-            // Conversión segura de tipos numéricos evitando ClassCastException
-            int cantidad = item.get("cantidad") instanceof Number 
-                    ? ((Number) item.get("cantidad")).intValue() 
-                    : Integer.parseInt(String.valueOf(item.get("cantidad")));
-
-            double precioUnitario = item.get("precioUnitario") instanceof Number
-                    ? ((Number) item.get("precioUnitario")).doubleValue()
-                    : Double.parseDouble(String.valueOf(item.get("precioUnitario")));
-
-            Producto producto = productoRepository.findById(productoId)
-                    .orElseThrow(() -> new RuntimeException("Producto no encontrado en catálogo con ID: " + productoId));
-
-            if (producto.getStock() < cantidad) {
-                throw new RuntimeException("Stock insuficiente para: " + producto.getNombre());
-            }
-
-            // Descontar inventario
-            producto.setStock(producto.getStock() - cantidad);
-            productoRepository.save(producto);
-
-            DetalleBoleta detalle = new DetalleBoleta();
-            detalle.setBoleta(boleta);
-            detalle.setProducto(producto);
-            detalle.setCantidad(cantidad);
-            detalle.setPrecioUnitario(precioUnitario);
-            detalle.setSubtotal(cantidad * precioUnitario);
-
-            boleta.getDetalles().add(detalle);
-            total += detalle.getSubtotal();
+        var receipt=new Boleta();receipt.setUsuario(user);receipt.setRequestId(requestId);receipt.setFechaEmision(new Date());BigDecimal total=BigDecimal.ZERO;
+        var events=new ArrayList<Map<String,Object>>();
+        for(var entry:quantities.entrySet()){
+            int quantity=entry.getValue();if(quantity>100)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Cantidad excedida");
+            var product=productos.findById(entry.getKey()).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Producto no encontrado"));
+            if(!Double.isFinite(product.getPrecio())||product.getPrecio()<0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Precio de catalogo invalido");
+            double discount=product.getDescuento();
+            if(discount<0||discount>100)throw new ResponseStatusException(HttpStatus.CONFLICT,"Descuento de catalogo invalido");
+            BigDecimal price=BigDecimal.valueOf(product.getPrecio()).multiply(BigDecimal.valueOf(1-discount/100)).setScale(2,RoundingMode.HALF_UP);
+            if(productos.descontarStockAtomicamente(product.getId(),quantity)!=1)throw new ResponseStatusException(HttpStatus.CONFLICT,"Stock insuficiente para "+product.getNombre());
+            var detail=new DetalleBoleta();detail.setBoleta(receipt);detail.setProducto(product);detail.setCantidad(quantity);detail.setPrecioUnitario(price.doubleValue());detail.setSubtotal(price.multiply(BigDecimal.valueOf(quantity)).doubleValue());receipt.getDetalles().add(detail);
+            total=total.add(BigDecimal.valueOf(detail.getSubtotal()));events.add(Map.of("productoId",product.getId(),"cantidad",quantity,"stockAfter",productos.stockActual(product.getId())));
         }
-
-        boleta.setTotal(total);
-
-        // 3. Guardar boleta y sus detalles en Oracle Autonomous Database
-        Boleta boletaGuardada = boletaRepository.save(boleta);
-
-        // 4. Disparar evento hacia RabbitMQ (pedidos.queue)
-        if (pedidoProducerService != null) {
-            String descripcion = String.format("Boleta N° %d generada para %s %s por un total de $%.2f (%d items)",
-                    boletaGuardada.getId(),
-                    usuario.getNombre() != null ? usuario.getNombre() : "Cliente",
-                    usuario.getApellido() != null ? usuario.getApellido() : "",
-                    boletaGuardada.getTotal(),
-                    boletaGuardada.getDetalles().size());
-
-            pedidoProducerService.enviarPedido("BOL-" + boletaGuardada.getId(), descripcion);
-        }
-
-        return boletaGuardada;
+        receipt.setTotal(total.doubleValue());var saved=boletas.saveAndFlush(receipt);
+        producer.publicarEventosDeCompra(saved.getId(),events,saved.getTotal(),user.getEmail(),user.getAzureSubject());
+        return saved;
     }
-
-    public Boleta getBoletaById(Long id) {
-        return boletaRepository.findById(id).orElse(null);
-    }
-
-    public List<Boleta> getBoletasByUsuario(int usuarioId) {
-        return boletaRepository.findByUsuario_UsuarioId(usuarioId);
-    }
+    public Boleta getBoletaById(Long id){return boletas.findById(id).orElse(null);}
+    public List<Boleta> getBoletasByUsuario(int usuarioId){return boletas.findByUsuario_UsuarioId(usuarioId);}
 }

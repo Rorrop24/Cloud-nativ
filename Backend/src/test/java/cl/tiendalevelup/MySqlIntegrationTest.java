@@ -1,7 +1,12 @@
 package cl.tiendalevelup;
 
 import cl.tiendalevelup.Entity.Producto;
+import cl.tiendalevelup.Entity.Resenia;
+import cl.tiendalevelup.Entity.Usuario;
 import cl.tiendalevelup.Repository.ProductoRepository;
+import cl.tiendalevelup.Repository.ReseniaRepository;
+import cl.tiendalevelup.Repository.UsuarioRepository;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -38,6 +43,31 @@ class MySqlIntegrationTest {
 
     @Autowired private JdbcTemplate jdbc;
     @Autowired private ProductoRepository productos;
+    @Autowired private UsuarioRepository usuarios;
+    @Autowired private ReseniaRepository resenias;
+    @Autowired private EntityManager entityManager;
+
+    @Test
+    void longReviewTextRoundTripsOnActualMySql() {
+        Usuario usuario = new Usuario();
+        usuario.setNombre("Persona"); usuario.setApellido("Prueba");
+        usuario.setRut("12345678-9"); usuario.setEmail("mysql-review@example.test");
+        usuario.setPassword("not-a-login-password"); usuario.setFechaNacimiento("2000-01-01");
+        usuario.setRegion("Metropolitana"); usuario.setComuna("Santiago");
+        usuario.setTelefono("123456789"); usuario.setRol("USER");
+        usuarios.saveAndFlush(usuario);
+        Producto producto = new Producto();
+        producto.setId("MYSQL-TEXT"); producto.setNombre("Prueba de texto");
+        producto.setPrecio(1000); producto.setStock(1);
+        productos.saveAndFlush(producto);
+        Resenia resenia = new Resenia();
+        resenia.setUsuario(usuario); resenia.setProducto(producto);
+        resenia.setTexto("Reseña extensa ñ ".repeat(500)); resenia.setCalificacion(5);
+        String expected = resenia.getTexto();
+        Long id = resenias.saveAndFlush(resenia).getId();
+        entityManager.clear();
+        assertThat(resenias.findById(id).orElseThrow().getTexto()).isEqualTo(expected);
+    }
 
     @Test
     void flywaySchemaIsValidatedAgainstActualMySql() {

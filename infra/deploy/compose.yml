@@ -4,46 +4,77 @@ x-logging: &logging
   options:
     max-size: "10m"
     max-file: "3"
+x-service: &service
+  restart: unless-stopped
+  networks: [application]
+  logging: *logging
 services:
   backend:
+    <<: *service
     build: ./Backend
-    restart: unless-stopped
-    mem_limit: 1200m
+    mem_limit: 900m
     env_file: /etc/punto-gamer/backend.env
-    volumes:
-      - ./data:/app/data
-    networks: [application]
-    logging: *logging
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx448m"
+    volumes: ["./data:/app/data"]
   bff:
+    <<: *service
     build: ./BffJava
-    restart: unless-stopped
-    mem_limit: 768m
+    mem_limit: 400m
     env_file: /etc/punto-gamer/bff.env
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m"
     depends_on:
-      backend:
-        condition: service_healthy
-    networks: [application]
-    logging: *logging
+      backend: {condition: service_healthy}
+  cart:
+    <<: *service
+    build: ./services/cart-service
+    mem_limit: 500m
+    env_file: /etc/punto-gamer/cart.env
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx256m"
+    depends_on:
+      backend: {condition: service_healthy}
+  inventory:
+    <<: *service
+    build: ./services/inventory-service
+    mem_limit: 400m
+    env_file: /etc/punto-gamer/inventory.env
+    depends_on:
+      backend: {condition: service_healthy}
+  notifications:
+    <<: *service
+    build: ./services/notification-service
+    mem_limit: 400m
+    env_file: /etc/punto-gamer/notifications.env
+    depends_on:
+      backend: {condition: service_healthy}
+  rabbit-admin:
+    <<: *service
+    build: ./services/rabbit-admin-service
+    mem_limit: 400m
+    env_file: /etc/punto-gamer/rabbit-admin.env
+    depends_on:
+      backend: {condition: service_healthy}
   proxy:
+    <<: *service
     image: nginx:stable-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94
-    restart: unless-stopped
     mem_limit: 128m
     ports: ["8080:8080"]
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./Frontend/dist:/usr/share/nginx/html:ro
     depends_on:
-      backend:
-        condition: service_healthy
-      bff:
-        condition: service_healthy
+      backend: {condition: service_healthy}
+      bff: {condition: service_healthy}
+      cart: {condition: service_healthy}
+      inventory: {condition: service_healthy}
+      notifications: {condition: service_healthy}
+      rabbit-admin: {condition: service_healthy}
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
+      test: ["CMD","wget","-q","-O","/dev/null","http://127.0.0.1:8080/health"]
       interval: 20s
       timeout: 5s
       retries: 5
-    networks: [application]
-    logging: *logging
 networks:
-  application:
-    driver: bridge
+  application: {driver: bridge}

@@ -8,8 +8,8 @@ try {
     $outputs = & terraform output -json | Out-String | ConvertFrom-Json
     if ($LASTEXITCODE -ne 0 -or !$outputs.website_url.value) { throw 'El proyecto completo no esta aplicado.' }
     $website = $outputs.website_url.value
-    $checks = @(@{ Path = '/'; Status = 200 }, @{ Path = '/auth'; Status = 200 },
-        @{ Path = '/health'; Status = 200 }, @{ Path = '/v2/productos/todos'; Status = 200 },
+    $checks = @(@{ Path = '/'; Status = 200 }, @{ Path = '/catalogo'; Status = 200 },
+        @{ Path = '/health/backend'; Status = 200 }, @{ Path = '/health/bff'; Status = 200 }, @{ Path = '/health/cart'; Status = 200 }, @{ Path = '/health/inventory'; Status = 200 }, @{ Path = '/health/notifications'; Status = 200 }, @{ Path = '/health/rabbit-admin'; Status = 200 }, @{ Path = '/v2/productos/todos'; Status = 200 },
         @{ Path = '/api/bff/me'; Status = 401 }, @{ Path = '/api/rabbitmq/queues/test'; Status = 401 })
     Add-Type -AssemblyName System.Net.Http
     $client = New-Object Net.Http.HttpClient

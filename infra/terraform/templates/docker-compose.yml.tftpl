@@ -25,6 +25,7 @@ x-rabbitmq: &rabbitmq
       max-file: '3'
 
 services:
+  # Los pares deben arrancar para que el cluster recupere su quorum.
   rabbitmq-1:
     <<: *rabbitmq
     hostname: rabbitmq-1
@@ -40,7 +41,7 @@ services:
     hostname: rabbitmq-2
     depends_on:
       rabbitmq-1:
-        condition: service_healthy
+        condition: service_started
     ports:
       - '5673:5672'
       - '127.0.0.1:15673:15672'
@@ -53,7 +54,7 @@ services:
     hostname: rabbitmq-3
     depends_on:
       rabbitmq-2:
-        condition: service_healthy
+        condition: service_started
     ports:
       - '5674:5672'
       - '127.0.0.1:15674:15672'

@@ -7,11 +7,13 @@ import { MsalModule, MsalGuard, MsalService, MsalBroadcastService, MsalIntercept
 import { APP_CONFIG } from './app-config';
 import { guardConfig, interceptorConfig } from './auth/msal.config';
 import { accessGuard } from './auth/access.guard';
-import { AppComponent, HomeComponent, CatalogComponent, ProfileComponent, AdminComponent, DeniedComponent } from './pages';
+import { AppComponent, HomeComponent, CatalogComponent, CartComponent, DocumentsComponent, ProfileComponent, AdminComponent, DeniedComponent } from './pages';
 
 const routes: Routes = [
   { path: '', component: HomeComponent },
   { path: 'catalogo', component: CatalogComponent, canActivate: [MsalGuard, accessGuard], data: { scopes: ['Pedidos.Read'] } },
+  { path: 'carrito', component: CartComponent, canActivate: [MsalGuard, accessGuard], data: { scopes: ['Pedidos.Read'] } },
+  { path: 'documentos', component: DocumentsComponent, canActivate: [MsalGuard, accessGuard], data: { scopes: ['Pedidos.Read'] } },
   { path: 'cuenta', component: ProfileComponent, canActivate: [MsalGuard, accessGuard], data: { scopes: ['Pedidos.Read'] } },
   { path: 'administracion', component: AdminComponent, canActivate: [MsalGuard, accessGuard], data: { roles: ['Rabbit.Admin'] } },
   { path: 'acceso-denegado', component: DeniedComponent },
@@ -19,7 +21,7 @@ const routes: Routes = [
 ];
 
 @NgModule({
-  declarations: [AppComponent, HomeComponent, CatalogComponent, ProfileComponent, AdminComponent, DeniedComponent],
+  declarations: [AppComponent, HomeComponent, CatalogComponent, CartComponent, DocumentsComponent, ProfileComponent, AdminComponent, DeniedComponent],
   imports: [BrowserModule, MsalModule, RouterModule.forRoot(routes)],
   providers: [
     provideZonelessChangeDetection(),

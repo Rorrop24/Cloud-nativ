@@ -31,6 +31,11 @@ public class Boleta {
     @JsonManagedReference
     private List<DetalleBoleta> detalles = new ArrayList<>();
 
+    @Column(name="request_id", unique=true, length=100)
+    private String requestId;
+    public String getRequestId(){return requestId;}
+    public void setRequestId(String value){requestId=value;}
+
     // Getters y setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }

@@ -81,6 +81,7 @@ try {
         & (Join-Path $PSScriptRoot 'Build-Project.ps1') -TenantId $configuration.tenant -ClientId $configuration.client -Audience $configuration.audience
     }
     $artifacts = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    if ($artifacts.release_schema -ne 2) { throw 'Paquete antiguo: reconstruir Angular y los seis servicios antes de planificar.' }
     if ((Get-FileHash $artifacts.artifact_path -Algorithm SHA256).Hash -ne $artifacts.artifact_sha256 -or
             (Get-FrontendFingerprint $artifacts.frontend_path) -ne $artifacts.frontend_sha256) {
         throw 'Los archivos cambiaron desde la construccion; reconstruir y generar un plan nuevo.'

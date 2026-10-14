@@ -150,6 +150,12 @@ resource "aws_instance" "rabbitmq" {
   user_data                   = local.bootstrap
   user_data_replace_on_change = true
 
+  lifecycle {
+    # El bootstrap solo inicializa instancias nuevas. Las correcciones sobre una
+    # EC2 existente se aplican en el host para conservar los volumenes RabbitMQ.
+    ignore_changes = [user_data]
+  }
+
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"

@@ -21,7 +21,7 @@ public class PedidoController {
         String detalle = body.getOrDefault("detalle", "Pedido procesado");
         
         pedidoProducerService.enviarPedido(cliente, detalle);
-        return ResponseEntity.ok(Map.of("mensaje", "Evento enviado a pedidos.queue"));
+        return ResponseEntity.ok(Map.of("mensaje", "Evento registrado para publicacion"));
     }
 
     // 2. NUEVO: Simulación de fallo en stock (inventario.queue -> inventario.dlq)
@@ -31,7 +31,7 @@ public class PedidoController {
         String detalle = body.getOrDefault("detalle", "ERROR_STOCK: Sin stock físico");
         
         pedidoProducerService.enviarAInventario(cliente, detalle);
-        return ResponseEntity.ok(Map.of("mensaje", "Evento enviado a inventario.queue"));
+        return ResponseEntity.ok(Map.of("mensaje", "Evento registrado para publicacion"));
     }
 
     // 3. NUEVO: Simulación de fallo en correo (notificaciones.queue -> notificaciones.dlq)
@@ -41,6 +41,6 @@ public class PedidoController {
         String detalle = body.getOrDefault("detalle", "ERROR_NOTIFICACION: Servidor SMTP caído");
         
         pedidoProducerService.enviarANotificaciones(cliente, detalle);
-        return ResponseEntity.ok(Map.of("mensaje", "Evento enviado a notificaciones.queue"));
+        return ResponseEntity.ok(Map.of("mensaje", "Evento registrado para publicacion"));
     }
 }

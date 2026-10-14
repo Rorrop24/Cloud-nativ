@@ -3,7 +3,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY target/punto-gamer-bff-1.0.0.jar app.jar
+COPY --chown=10001:10001 --chmod=0444 target/punto-gamer-bff-1.0.0.jar app.jar
 USER 10001:10001
 ENV JAVA_TOOL_OPTIONS="-Xms128m -Xmx512m"
 EXPOSE 8084

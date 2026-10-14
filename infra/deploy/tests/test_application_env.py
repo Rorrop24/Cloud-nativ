@@ -23,7 +23,7 @@ class ApplicationEnvironmentTest(unittest.TestCase):
             {"Name": "/rabbit/password", "Value": "R" * 64, "Type": "SecureString"},
         ]}
 
-    def test_secrets_only_go_to_backend(self):
+    def test_bff_has_no_database_or_broker_secrets(self):
         module.configure(self.config, self.response, self.target)
         backend = (self.target / "backend.env").read_text()
         bff = (self.target / "bff.env").read_text()
@@ -31,6 +31,18 @@ class ApplicationEnvironmentTest(unittest.TestCase):
         self.assertIn("RABBITMQ_PASSWORD=" + "R" * 64, backend)
         self.assertNotIn("PASSWORD", bff)
         self.assertIn("BACKEND_URL=http://backend:8082", bff)
+
+    def test_role_environment_keeps_port_profile_and_private_settings_separate(self):
+        self.config["backend"].update({"SERVER_PORT": "8082", "AZURE_API_AUDIENCE": "api-id", "OTHER_SETTING": "backend-only"})
+        module.configure(self.config, self.response, self.target)
+        for service in ("cart", "inventory", "notifications", "rabbit-admin"):
+            values = (self.target / (service + ".env")).read_text()
+            self.assertIn("DB_PASSWORD=" + "D" * 40, values)
+            self.assertIn("AZURE_API_AUDIENCE=api-id", values)
+            self.assertNotIn("SERVER_PORT", values)
+            self.assertNotIn("SPRING_PROFILES_ACTIVE", values)
+            self.assertNotIn("OTHER_SETTING", values)
+            self.assertIn("OUTBOX_ENABLED=" + ("true" if service == "cart" else "false"), values)
 
     def test_missing_secret_does_not_write_files(self):
         self.response["InvalidParameters"] = ["/db/password"]

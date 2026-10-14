@@ -1,8 +1,28 @@
 function Invoke-DeploymentAws {
     param([string[]]$Arguments)
-    $result = & aws @Arguments 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "AWS: $($result | Out-String)" }
-    return (($result | Out-String) | ConvertFrom-Json)
+    $stderrPath = [IO.Path]::GetTempFileName()
+    try {
+        $previousPreference = $ErrorActionPreference
+        try {
+            # Windows PowerShell 5.1 converts native stderr to ErrorRecords.
+            # Capture it without Stop interrupting the process before its exit code.
+            $ErrorActionPreference = 'Continue'
+            $PSNativeCommandUseErrorActionPreference = $false
+            $result = & aws @Arguments 2> $stderrPath
+            $exitCode = $LASTEXITCODE
+        } finally { $ErrorActionPreference = $previousPreference }
+        $stderr = [IO.File]::ReadAllText($stderrPath).Trim()
+        if ($exitCode -ne 0) {
+            if (!$stderr) { $stderr = 'AWS CLI no proporciono un mensaje de error.' }
+            throw "AWS $($Arguments[0]) $($Arguments[1]) (exit $exitCode): $stderr"
+        }
+        # Parse stdout only: warnings on stderr must not corrupt JSON or reveal secrets.
+        $stdout = ($result | Out-String).Trim()
+        if (!$stdout) { return $null }
+        return ($stdout | ConvertFrom-Json)
+    } finally {
+        Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Get-DeploymentConfiguration {

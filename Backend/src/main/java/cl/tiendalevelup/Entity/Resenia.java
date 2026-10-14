@@ -2,6 +2,7 @@ package cl.tiendalevelup.Entity;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import org.hibernate.Length;
 
 @Entity
 @Table(name = "RESENIAS")
@@ -21,8 +22,8 @@ public class Resenia {
     @JoinColumn(name = "usuario_id", referencedColumnName = "usuarioId", nullable = false)
     private Usuario usuario;
 
-    @Lob
-    @Column(nullable = false)
+    // MySQL LONGTEXT, without JDBC CLOB semantics from @Lob.
+    @Column(nullable = false, length = Length.LONG32)
     private String texto;
 
     @Column(nullable = false)

@@ -34,29 +34,7 @@ public class BoletaController {
         int usuarioId = ((Number) body.get("usuarioId")).intValue();
         List<Map<String, Object>> items = (List<Map<String, Object>>) body.get("items");
 
-        // 1. Guardar la boleta en la base de datos Oracle
-        Boleta boletaGuardada = boletaService.generarBoleta(usuarioId, items);
-
-        // 2. Disparar eventos concurrentes a RabbitMQ (pedidos, notificaciones, inventario)
-        if (pedidoProducerService != null && boletaGuardada != null) {
-            try {
-                String emailCliente = (boletaGuardada.getUsuario() != null && boletaGuardada.getUsuario().getEmail() != null)
-                        ? boletaGuardada.getUsuario().getEmail()
-                        : "cliente@tiendalevelup.cl";
-
-                Double totalMonto = boletaGuardada.getTotal();
-
-                pedidoProducerService.publicarEventosDeCompra(
-                        boletaGuardada.getId(),
-                        items,          // Se envían los productos y cantidades para descontar stock
-                        totalMonto,
-                        emailCliente
-                );
-                System.out.println("[BOLETA CONTROLLER] Eventos de compra distribuidos con exito para boleta ID: " + boletaGuardada.getId());
-            } catch (Exception e) {
-                System.err.println("[BOLETA CONTROLLER ERROR] Error al emitir eventos RabbitMQ: " + e.getMessage());
-            }
-        }
+        Boleta boletaGuardada = boletaService.generarBoleta(usuarioId, items, (String) body.get("requestId"));
 
         return boletaGuardada;
     }

@@ -12,9 +12,11 @@ import { interceptorConfig } from '../src/app/auth/msal.config.js';
 import { AuthService } from '../src/app/auth/auth.service.js';
 import { accessGuard } from '../src/app/auth/access.guard.js';
 
-test('MsalInterceptor attaches the API JWT to both Java services, never another origin', async () => {
+test('MsalInterceptor attaches the API JWT to all six services, never another origin', async () => {
   const config = interceptorConfig({ tenantId: '', clientId: '', apiScope: 'api://test/Pedidos.Read',
-    bffUrl: 'https://bff.example.test', backendUrl: 'https://backend.example.test' });
+    bffUrl: 'https://bff.example.test', backendUrl: 'https://backend.example.test',
+    cartUrl: 'https://cart.example.test', adminUrl: 'https://admin.example.test',
+    notificationsUrl: 'https://notifications.example.test', inventoryUrl: 'https://inventory.example.test' });
   const noop = () => {};
   let acquisitions = 0;
   const auth = {
@@ -29,7 +31,9 @@ test('MsalInterceptor attaches the API JWT to both Java services, never another 
   const location = { normalize: (url: string) => url } as unknown as Location;
   const document = { createElement: () => ({ href: '' }) } as unknown as Document;
   const interceptor = new MsalInterceptor(config, auth, location, {} as MsalBroadcastService, document);
-  for (const url of ['https://bff.example.test/api/bff/profile', 'https://backend.example.test/v2/usuarios/todos']) {
+  for (const url of ['https://bff.example.test/api/bff/profile', 'https://backend.example.test/v2/usuarios/todos',
+    'https://cart.example.test/api/cart', 'https://admin.example.test/api/rabbitmq/topology',
+    'https://notifications.example.test/api/notifications', 'https://inventory.example.test/api/inventory/movements']) {
     const handler = { handle: (request: HttpRequest<unknown>) => {
       assert.equal(request.headers.get('Authorization'), 'Bearer verified-api-token');
       return of(new HttpResponse({ status: 200 }));
@@ -41,7 +45,7 @@ test('MsalInterceptor attaches the API JWT to both Java services, never another 
     return of(new HttpResponse({ status: 200 }));
   } } as HttpHandler;
   await firstValueFrom(interceptor.intercept(new HttpRequest('GET', 'https://bff.example.test.attacker.test/api'), handler));
-  assert.equal(acquisitions, 2);
+  assert.equal(acquisitions, 6);
 });
 
 async function checkGuard(roles: string[], scopes: string[], required: Record<string, unknown>, failure = false) {

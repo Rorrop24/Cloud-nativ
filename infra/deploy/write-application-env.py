@@ -36,9 +36,14 @@ def configure(config, response, directory):
         if item.get("Type") != "SecureString" or not re.fullmatch(pattern, item.get("Value", "")):
             raise ValueError("SecureString ausente o formato no permitido")
         secrets[kind] = item["Value"]
-    backend = {**config["backend"], "DB_PASSWORD": secrets["database"], "RABBITMQ_PASSWORD": secrets["rabbit"]}
+    backend = {**config["backend"], "DB_PASSWORD": secrets["database"], "RABBITMQ_PASSWORD": secrets["rabbit"], "CART_URL": "http://cart:8085"}
     write_environment(directory / "backend.env", backend)
-    write_environment(directory / "bff.env", config["bff"])
+    write_environment(directory / "bff.env", {**config["bff"], "RABBIT_ADMIN_URL": "http://rabbit-admin:8088"})
+    allowed = {"DB_URL", "DB_USERNAME", "DB_PASSWORD", "RABBITMQ_ADDRESSES", "RABBITMQ_USERNAME", "RABBITMQ_PASSWORD", "RABBITMQ_VHOST", "AZURE_ISSUER_URI", "AZURE_JWK_SET_URI", "AZURE_API_AUDIENCE", "ALLOWED_ORIGINS"}
+    shared = {key: value for key, value in backend.items() if key in allowed}
+    for name in ("cart", "inventory", "notifications", "rabbit-admin"):
+        values = {**shared, "BACKEND_URL": "http://backend:8082", "OUTBOX_ENABLED": "true" if name == "cart" else "false"}
+        write_environment(directory / (name + ".env"), values)
 
 
 if __name__ == "__main__":

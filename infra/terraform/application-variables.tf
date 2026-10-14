@@ -51,7 +51,7 @@ variable "application_instance_type" {
 
 variable "azure_tenant_id" {
   type    = string
-  default = "a5af7e18-9965-418a-9b8a-a0dd9bd96c52"
+  default = "6fb3d735-1c10-4007-b977-7dbea3388386"
   validation {
     condition     = can(regex("^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$", var.azure_tenant_id))
     error_message = "Indica el tenant ID de Azure como UUID."
@@ -60,7 +60,7 @@ variable "azure_tenant_id" {
 
 variable "azure_frontend_client_id" {
   type    = string
-  default = "9870c4b1-0353-4eb0-8e1d-812cb76676b5"
+  default = "30a37963-4067-4ac4-a8c4-fe7edcd2c289"
   validation {
     condition     = can(regex("^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$", var.azure_frontend_client_id))
     error_message = "Indica el client ID publico de la SPA como UUID."
@@ -69,7 +69,7 @@ variable "azure_frontend_client_id" {
 
 variable "azure_api_audience" {
   type    = string
-  default = "ae706c64-5e56-4573-b311-b2919b52c67a"
+  default = "ff0f75e1-6d35-40f4-89ae-44a2cfacd4b1"
   validation {
     condition     = can(regex("^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$", var.azure_api_audience))
     error_message = "Indica la audiencia v2 de la API Azure como UUID."

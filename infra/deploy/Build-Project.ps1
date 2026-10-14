@@ -1,8 +1,8 @@
 [CmdletBinding()]
 param(
-    [string]$TenantId = 'a5af7e18-9965-418a-9b8a-a0dd9bd96c52',
-    [string]$ClientId = '9870c4b1-0353-4eb0-8e1d-812cb76676b5',
-    [string]$Audience = 'ae706c64-5e56-4573-b311-b2919b52c67a'
+    [string]$TenantId = '6fb3d735-1c10-4007-b977-7dbea3388386',
+    [string]$ClientId = '30a37963-4067-4ac4-a8c4-fe7edcd2c289',
+    [string]$Audience = 'ff0f75e1-6d35-40f4-89ae-44a2cfacd4b1'
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'DeploymentTools.ps1')
@@ -30,26 +30,37 @@ try {
             Where-Object { $_.Name -match '21' -and (Test-Path -LiteralPath (Join-Path $_.FullName 'bin/javac.exe')) } |
             Select-Object -First 1
         if ($jdk) { $env:JAVA_HOME = $jdk.FullName }
+        if (!$env:JAVA_HOME) {
+            $androidJdk = Join-Path $env:ProgramFiles 'Android/Android Studio/jbr'
+            if (Test-Path -LiteralPath (Join-Path $androidJdk 'bin/javac.exe')) {
+                $env:JAVA_HOME = $androidJdk
+            }
+        }
     }
     if ($env:JAVA_HOME) { $env:PATH = "$env:JAVA_HOME\bin;$env:PATH" }
     Get-Command java -ErrorAction Stop | Out-Null
     Get-Command npm.cmd -ErrorAction Stop | Out-Null
-    foreach ($project in @('Backend', 'BffJava')) {
-        Set-Location -LiteralPath (Join-Path $root $project)
-        & ./mvnw.cmd -B -q verify
-        if ($LASTEXITCODE -ne 0) { throw "No compila o fallan las pruebas de $project." }
-    }
-    Set-Location -LiteralPath (Join-Path $root 'Frontend')
+    Set-Location -LiteralPath $root
+    & ./mvnw.cmd -B -q clean verify
+    if ($LASTEXITCODE -ne 0) { throw 'No compila o fallan las pruebas de los seis servicios Java.' }
+    Set-Location -LiteralPath (Join-Path $root 'FrontendAngular')
     & npm.cmd ci --no-audit --no-fund
-    if ($LASTEXITCODE -ne 0) { throw 'No se pudieron instalar dependencias del frontend.' }
+    if ($LASTEXITCODE -ne 0) { throw 'No se pudieron instalar dependencias Angular.' }
+    & npm.cmd test
+    if ($LASTEXITCODE -ne 0) { throw 'Fallan las pruebas de autenticacion Angular.' }
     & npm.cmd run build
-    if ($LASTEXITCODE -ne 0) { throw 'No compila el frontend.' }
+    if ($LASTEXITCODE -ne 0) { throw 'No compila Angular.' }
 
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
     $files = @(
         'Backend/Dockerfile', 'Backend/.dockerignore', 'Backend/target/TiendaLevelUp-0.0.1-SNAPSHOT.jar',
         'BffJava/Dockerfile', 'BffJava/.dockerignore', 'BffJava/target/punto-gamer-bff-1.0.0.jar'
     )
+    foreach ($service in @('cart-service','inventory-service','notification-service','rabbit-admin-service')) {
+        $files += "services/$service/Dockerfile"
+        $files += "services/$service/.dockerignore"
+        $files += "services/$service/target/$service-1.0.0.jar"
+    }
     foreach ($relative in $files) {
         $destination = Join-Path $stage $relative
         New-Item -ItemType Directory -Path (Split-Path $destination -Parent) -Force | Out-Null
@@ -58,8 +69,15 @@ try {
     foreach ($name in @('compose.yml', 'nginx.conf', 'write-application-env.py')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $stage $name)
     }
+    $productionConfig = @{ tenantId=$TenantId; clientId=$ClientId; apiScope="api://$Audience/Pedidos.Read"; bffUrl='/'; backendUrl='/'; cartUrl='/'; adminUrl='/'; notificationsUrl='/'; inventoryUrl='/' }
+    [IO.File]::WriteAllText((Join-Path $root 'FrontendAngular/dist/punto-gamer/browser/config.json'), ($productionConfig | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
     New-Item -ItemType Directory -Path (Join-Path $stage 'Frontend') -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $root 'Frontend/dist') -Destination (Join-Path $stage 'Frontend/dist') -Recurse
+    Copy-Item -LiteralPath (Join-Path $root 'FrontendAngular/dist/punto-gamer/browser') -Destination (Join-Path $stage 'Frontend/dist') -Recurse
+    $publicConfiguration = @{
+        tenantId = $TenantId; clientId = $ClientId; apiScope = "api://$Audience/Pedidos.Read";
+        bffUrl = '/'; backendUrl = '/'; cartUrl = '/'; adminUrl = '/'; notificationsUrl = '/'; inventoryUrl = '/'
+    }
+    [IO.File]::WriteAllText((Join-Path $stage 'Frontend/dist/config.json'), ($publicConfiguration | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
     Add-Type -AssemblyName System.IO.Compression
     $archivePath = Join-Path $output 'application.zip'
     $stream = [IO.File]::Open($archivePath, [IO.FileMode]::Create)
@@ -75,10 +93,10 @@ try {
             try { $source.CopyTo($destination) } finally { $source.Dispose(); $destination.Dispose() }
         }
     } finally { $archive.Dispose(); $stream.Dispose() }
-    $manifest = @{
+    $manifest = @{ release_schema = 2; java_services = @("backend","bff","cart","inventory","notifications","rabbit-admin");
         artifact_path = $archivePath; artifact_sha256 = (Get-FileHash $archivePath -Algorithm SHA256).Hash;
-        frontend_path = Join-Path $root 'Frontend/dist';
-        frontend_sha256 = Get-FrontendFingerprint -Path (Join-Path $root 'Frontend/dist')
+        frontend_path = Join-Path $root 'FrontendAngular/dist/punto-gamer/browser';
+        frontend_sha256 = Get-FrontendFingerprint -Path (Join-Path $root 'FrontendAngular/dist/punto-gamer/browser')
     }
     [IO.File]::WriteAllText((Join-Path $output 'artifacts.json'), ($manifest | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
     Write-Host 'Paquete listo en infra/.deploy/application.zip. Docker se ejecutara en EC2, no en este PC.'
