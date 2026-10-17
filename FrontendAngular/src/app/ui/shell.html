@@ -1,0 +1,9 @@
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
+<div class="top-strip"><span>TODO PARA TU PRÓXIMA PARTIDA</span><span class="top-strip-right">Punto Gamer <span class="tiny-dot"></span> Tu espacio de juego</span></div>
+<header class="site-header"><div class="header-inner">
+  <a class="brand" routerLink="/" aria-label="Punto Gamer inicio"><span class="brand-symbol"><pg-icon name="game" [size]="27" /></span><span>PUNTO<span class="brand-light">GAMER</span><small>PLAY YOUR WAY</small></span></a>
+  <nav aria-label="Principal"><a routerLink="/catalogo" routerLinkActive="active">Catálogo</a><a routerLink="/documentos" routerLinkActive="active">Mis comprobantes</a><a routerLink="/administracion" routerLinkActive="active">Administración <pg-icon name="sliders" [size]="14" /></a></nav>
+  <div class="header-actions"><a class="account-link" routerLink="/cuenta" aria-label="Mi cuenta"><pg-icon name="user" /><span>{{auth.account() ? 'Mi cuenta' : 'Ingresar'}}</span></a><a class="cart-link" routerLink="/carrito" routerLinkActive="active" aria-label="Ver carrito"><pg-icon name="cart" /><span class="cart-label">Carrito</span>@if(api.cartCount(); as count){<span class="cart-badge">{{count}}</span>}</a></div>
+</div></header>
+<main id="contenido" class="main-container">@if(auth.error()){<div class="alert error" role="alert"><pg-icon name="shield" />{{auth.error()}}</div>}<router-outlet /></main>
+<footer class="site-footer"><div class="footer-inner"><a class="brand footer-brand" routerLink="/"><span class="brand-symbol"><pg-icon name="game" /></span><span>PUNTO<span class="brand-light">GAMER</span></span></a><p>Equipa tu juego. Hazlo tuyo.</p><div><a routerLink="/catalogo">Catálogo</a><a routerLink="/carrito">Mi carrito</a><a routerLink="/cuenta">Mi cuenta</a></div></div><div class="footer-bottom"><span>Punto Gamer · Proyecto académico</span><span>Compras de demostración sin cobro bancario</span></div></footer>

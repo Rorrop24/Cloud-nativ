@@ -1,4 +1,7 @@
-import { NgModule, provideZonelessChangeDetection } from '@angular/core';
+import { NgModule, provideZonelessChangeDetection, LOCALE_ID } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localeEsCL from '@angular/common/locales/es-CL';
+registerLocaleData(localeEsCL);
 import { BrowserModule } from '@angular/platform-browser';
 import { HTTP_INTERCEPTORS, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { RouterModule, Routes } from '@angular/router';
@@ -7,6 +10,7 @@ import { MsalModule, MsalGuard, MsalService, MsalBroadcastService, MsalIntercept
 import { APP_CONFIG } from './app-config';
 import { guardConfig, interceptorConfig } from './auth/msal.config';
 import { accessGuard } from './auth/access.guard';
+import { IconComponent } from './icons.component';
 import { AppComponent, HomeComponent, CatalogComponent, CartComponent, DocumentsComponent, ProfileComponent, AdminComponent, DeniedComponent } from './pages';
 
 const routes: Routes = [
@@ -21,9 +25,10 @@ const routes: Routes = [
 ];
 
 @NgModule({
-  declarations: [AppComponent, HomeComponent, CatalogComponent, CartComponent, DocumentsComponent, ProfileComponent, AdminComponent, DeniedComponent],
+  declarations: [IconComponent, AppComponent, HomeComponent, CatalogComponent, CartComponent, DocumentsComponent, ProfileComponent, AdminComponent, DeniedComponent],
   imports: [BrowserModule, MsalModule, RouterModule.forRoot(routes)],
   providers: [
+    { provide: LOCALE_ID, useValue: 'es-CL' },
     provideZonelessChangeDetection(),
     provideHttpClient(withInterceptorsFromDi()),
     { provide: HTTP_INTERCEPTORS, useClass: MsalInterceptor, multi: true },
