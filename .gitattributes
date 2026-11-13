@@ -1,2 +1,4 @@
 infra/terraform/templates/*.tftpl text eol=lf
 infra/deploy/*.sh text eol=lf
+infra/terraform/templates/*.yml text eol=lf
+services/kafka-common/src/main/resources/kafka-defaults.properties text eol=lf

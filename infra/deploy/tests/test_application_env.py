@@ -44,6 +44,20 @@ class ApplicationEnvironmentTest(unittest.TestCase):
             self.assertNotIn("OTHER_SETTING", values)
             self.assertIn("OUTBOX_ENABLED=" + ("true" if service == "cart" else "false"), values)
 
+    def test_streaming_services_receive_kafka_but_no_database_or_broker_secrets(self):
+        self.config["backend"].update({"KAFKA_BOOTSTRAP_SERVERS": "10.0.1.50:9092,10.0.1.50:9093,10.0.1.50:9094",
+            "AZURE_API_AUDIENCE": "api-id", "SPRING_PROFILES_ACTIVE": "aws,streaming"})
+        module.configure(self.config, self.response, self.target)
+        self.assertIn("KAFKA_BOOTSTRAP_SERVERS=10.0.1.50:9092", (self.target / "backend.env").read_text())
+        for service in ("kafka-admin", "analytics"):
+            values = (self.target / (service + ".env")).read_text()
+            self.assertIn("KAFKA_BOOTSTRAP_SERVERS=10.0.1.50:9092,10.0.1.50:9093,10.0.1.50:9094", values)
+            self.assertIn("AZURE_API_AUDIENCE=api-id", values)
+            self.assertNotIn("PASSWORD", values)
+            self.assertNotIn("DB_URL", values)
+            self.assertNotIn("RABBITMQ", values)
+            self.assertNotIn("SPRING_PROFILES_ACTIVE", values)
+
     def test_missing_secret_does_not_write_files(self):
         self.response["InvalidParameters"] = ["/db/password"]
         with self.assertRaises(ValueError):

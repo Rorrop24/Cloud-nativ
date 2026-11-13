@@ -42,7 +42,7 @@ try {
     Get-Command npm.cmd -ErrorAction Stop | Out-Null
     Set-Location -LiteralPath $root
     & ./mvnw.cmd -B -q clean verify
-    if ($LASTEXITCODE -ne 0) { throw 'No compila o fallan las pruebas de los seis servicios Java.' }
+    if ($LASTEXITCODE -ne 0) { throw 'No compila o fallan las pruebas de los ocho servicios Java.' }
     Set-Location -LiteralPath (Join-Path $root 'FrontendAngular')
     & npm.cmd ci --no-audit --no-fund
     if ($LASTEXITCODE -ne 0) { throw 'No se pudieron instalar dependencias Angular.' }
@@ -56,7 +56,7 @@ try {
         'Backend/Dockerfile', 'Backend/.dockerignore', 'Backend/target/TiendaLevelUp-0.0.1-SNAPSHOT.jar',
         'BffJava/Dockerfile', 'BffJava/.dockerignore', 'BffJava/target/punto-gamer-bff-1.0.0.jar'
     )
-    foreach ($service in @('cart-service','inventory-service','notification-service','rabbit-admin-service')) {
+    foreach ($service in @('cart-service','inventory-service','notification-service','rabbit-admin-service','kafka-admin-service','kafka-analytics-service')) {
         $files += "services/$service/Dockerfile"
         $files += "services/$service/.dockerignore"
         $files += "services/$service/target/$service-1.0.0.jar"
@@ -93,7 +93,7 @@ try {
             try { $source.CopyTo($destination) } finally { $source.Dispose(); $destination.Dispose() }
         }
     } finally { $archive.Dispose(); $stream.Dispose() }
-    $manifest = @{ release_schema = 2; java_services = @("backend","bff","cart","inventory","notifications","rabbit-admin");
+    $manifest = @{ release_schema = 3; java_services = @("backend","bff","cart","inventory","notifications","rabbit-admin","kafka-admin","analytics");
         artifact_path = $archivePath; artifact_sha256 = (Get-FileHash $archivePath -Algorithm SHA256).Hash;
         frontend_path = Join-Path $root 'FrontendAngular/dist/punto-gamer/browser';
         frontend_sha256 = Get-FrontendFingerprint -Path (Join-Path $root 'FrontendAngular/dist/punto-gamer/browser')

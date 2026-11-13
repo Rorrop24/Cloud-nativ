@@ -1,4 +1,8 @@
-# Punto Gamer — EP2
+# Punto Gamer — EP3
+
+**EP3 agrega Kafka para streaming y analítica:** un cluster de tres brokers en su propia EC2, dos servicios nuevos (`kafka-admin-service`, `kafka-analytics-service`) y la biblioteca `kafka-common`. Son ocho aplicaciones Java en total. Ver **[la guía EP3](docs/EP3-aws.md)** para topics, rutas, despliegue y evidencias. Lo que sigue describe la base EP2, que no cambió.
+
+## Base EP2
 
 Angular con Microsoft Entra ID, seis aplicaciones Spring Boot y un cluster RabbitMQ de tres nodos. Terraform despliega dos EC2: una para los contenedores de la aplicación y otra para RabbitMQ. RDS MySQL guarda productos, compras, carritos, eventos y comprobantes.
 
@@ -12,6 +16,8 @@ Angular con Microsoft Entra ID, seis aplicaciones Spring Boot y un cluster Rabbi
 | Inventario | services/inventory-service | 8086 | Consumidor y auditoría de stock reservado |
 | Documentos | services/notification-service | 8087 | Consumidor, comprobantes HTML por usuario |
 | Administrador RabbitMQ | services/rabbit-admin-service | 8088 | CRUD de recursos y eventos de prueba |
+| Administrador Kafka (EP3) | services/kafka-admin-service | 8089 | Brokers, topics, consumer groups y eventos de prueba |
+| Analítica (EP3) | services/kafka-analytics-service | 8090 | Consumidores Kafka, agregados de ventas y DLT |
 
 `services/messaging-common` es una biblioteca compartida; no se cuenta como microservicio. Nginx sirve Angular y dirige las peticiones a cada aplicación. Las aplicaciones se ejecutan en contenedores independientes; no hace falta una EC2 por servicio. Los tres nodos RabbitMQ comparten su EC2, por lo que su tolerancia a fallas no cubre la pérdida de esa máquina.
 

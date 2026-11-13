@@ -2,7 +2,8 @@
 param(
     [ValidateSet('Plan', 'Apply')][string]$Mode = 'Plan',
     [switch]$SkipBuild,
-    [switch]$AllowApplicationReplacement
+    [switch]$AllowApplicationReplacement,
+    [switch]$AllowKafkaReplacement
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'DeploymentTools.ps1')
@@ -81,7 +82,7 @@ try {
         & (Join-Path $PSScriptRoot 'Build-Project.ps1') -TenantId $configuration.tenant -ClientId $configuration.client -Audience $configuration.audience
     }
     $artifacts = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-    if ($artifacts.release_schema -ne 2) { throw 'Paquete antiguo: reconstruir Angular y los seis servicios antes de planificar.' }
+    if ($artifacts.release_schema -ne 3) { throw 'Paquete antiguo: reconstruir Angular y los ocho servicios antes de planificar.' }
     if ((Get-FileHash $artifacts.artifact_path -Algorithm SHA256).Hash -ne $artifacts.artifact_sha256 -or
             (Get-FrontendFingerprint $artifacts.frontend_path) -ne $artifacts.frontend_sha256) {
         throw 'Los archivos cambiaron desde la construccion; reconstruir y generar un plan nuevo.'
@@ -115,8 +116,9 @@ try {
                 $isRelease = $change.type -eq 'aws_s3_object' -and $change.name -in @('frontend', 'application')
                 $isApplication = $change.address -eq 'aws_instance.application[0]' -and $AllowApplicationReplacement
                 $isAttachment = $change.type -eq 'aws_lb_target_group_attachment' -and $AllowApplicationReplacement
-                if (!$isRelease -and !$isApplication -and !$isAttachment) {
-                    throw "El plan borra/reemplaza $($change.address). Bloqueado para proteger RDS, red y RabbitMQ."
+                $isKafka = $change.address -eq 'aws_instance.kafka[0]' -and $AllowKafkaReplacement
+                if (!$isRelease -and !$isApplication -and !$isAttachment -and !$isKafka) {
+                    throw "El plan borra/reemplaza $($change.address). Bloqueado para proteger RDS, red, RabbitMQ y Kafka."
                 }
             }
         }

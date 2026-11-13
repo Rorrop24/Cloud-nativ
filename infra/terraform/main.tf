@@ -153,7 +153,8 @@ resource "aws_instance" "rabbitmq" {
   lifecycle {
     # El bootstrap solo inicializa instancias nuevas. Las correcciones sobre una
     # EC2 existente se aplican en el host para conservar los volumenes RabbitMQ.
-    ignore_changes = [user_data]
+    # Tampoco se recrea por una AMI nueva de Amazon Linux: se perderian las colas.
+    ignore_changes = [user_data, ami]
   }
 
   metadata_options {

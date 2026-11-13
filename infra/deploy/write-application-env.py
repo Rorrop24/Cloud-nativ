@@ -44,6 +44,11 @@ def configure(config, response, directory):
     for name in ("cart", "inventory", "notifications", "rabbit-admin"):
         values = {**shared, "BACKEND_URL": "http://backend:8082", "OUTBOX_ENABLED": "true" if name == "cart" else "false"}
         write_environment(directory / (name + ".env"), values)
+    # EP3: los servicios de streaming no usan RDS ni RabbitMQ, asi que no reciben sus claves.
+    streaming = {"KAFKA_BOOTSTRAP_SERVERS", "AZURE_ISSUER_URI", "AZURE_JWK_SET_URI", "AZURE_API_AUDIENCE", "ALLOWED_ORIGINS"}
+    stream_values = {key: value for key, value in backend.items() if key in streaming}
+    for name in ("kafka-admin", "analytics"):
+        write_environment(directory / (name + ".env"), stream_values)
 
 
 if __name__ == "__main__":

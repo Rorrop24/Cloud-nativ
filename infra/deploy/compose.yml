@@ -56,6 +56,17 @@ services:
     env_file: /etc/punto-gamer/rabbit-admin.env
     depends_on:
       backend: {condition: service_healthy}
+  # EP3: solo reciben la direccion de Kafka y la configuracion JWT; sin claves de RDS ni RabbitMQ.
+  kafka-admin:
+    <<: *service
+    build: ./services/kafka-admin-service
+    mem_limit: 400m
+    env_file: /etc/punto-gamer/kafka-admin.env
+  analytics:
+    <<: *service
+    build: ./services/kafka-analytics-service
+    mem_limit: 400m
+    env_file: /etc/punto-gamer/analytics.env
   proxy:
     <<: *service
     image: nginx:stable-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94
@@ -71,6 +82,8 @@ services:
       inventory: {condition: service_healthy}
       notifications: {condition: service_healthy}
       rabbit-admin: {condition: service_healthy}
+      kafka-admin: {condition: service_healthy}
+      analytics: {condition: service_healthy}
     healthcheck:
       test: ["CMD","wget","-q","-O","/dev/null","http://127.0.0.1:8080/health"]
       interval: 20s

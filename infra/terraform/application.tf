@@ -23,7 +23,9 @@ locals {
     database_password_path = local.database_password_path
     rabbit_password_path   = local.password_path
     backend = {
-      SPRING_PROFILES_ACTIVE = "aws"
+      # EP3: el perfil streaming activa los productores Kafka del Backend.
+      SPRING_PROFILES_ACTIVE  = "aws,streaming"
+      KAFKA_BOOTSTRAP_SERVERS = local.kafka_bootstrap
       DB_URL                 = "jdbc:mysql://${aws_db_instance.mysql[0].address}:3306/${var.database_name}?sslMode=VERIFY_IDENTITY&serverTimezone=UTC&characterEncoding=UTF-8"
       DB_USERNAME            = var.database_username
       RABBITMQ_ADDRESSES     = join(",", [for port in local.amqp_ports : "${aws_instance.rabbitmq.private_ip}:${port}"])
@@ -156,5 +158,6 @@ resource "aws_instance" "application" {
   }
   depends_on = [aws_s3_object.application, aws_iam_role_policy.application,
     aws_iam_role_policy_attachment.application_ssm, aws_route_table_association.public,
-  aws_vpc_security_group_egress_rule.backend, aws_vpc_security_group_ingress_rule.amqp]
+    aws_vpc_security_group_egress_rule.backend, aws_vpc_security_group_ingress_rule.amqp,
+  aws_vpc_security_group_ingress_rule.kafka]
 }

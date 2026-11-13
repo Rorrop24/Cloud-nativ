@@ -19,6 +19,9 @@ enable_cdn = false         # Learner Lab: web HTTPS por API Gateway, sin CloudFr
 project_name                = "punto-gamer"
 environment                 = "dev"
 instance_type               = "t3.medium"
+# EP3: la aplicacion (ocho servicios) y Kafka (tres brokers) usan t3.large por defecto.
+# application_instance_type = "t3.large"
+# kafka_instance_type       = "t3.large"
 volume_size_gib              = 40
 associate_public_ip_address = true
 

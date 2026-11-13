@@ -11,6 +11,8 @@ export interface Receipt { id:number;total:number; }
 export interface Document { event_id:string;title:string;boleta_id:number;created_at:string; }
 export interface Topology { queues:{name:string;exists:boolean;messages:number;consumers:number}[];exchanges:string[]; }
 export interface PublishedEvent {eventId:string;reference:string;routed:boolean;}
+export interface KafkaTopic {name:string;partitions:number;replicationFactor:number;minInSyncReplicas:number;messages:number;project:boolean;deadLetter:boolean;}
+export interface AnalyticsPanel {resumen:Record<string,unknown>;productos:Record<string,unknown>[];stockBajo:Record<string,unknown>[];ventasRecientes:Record<string,unknown>[];dlt:Record<string,unknown>[];}
 @Injectable({providedIn:'root'})
 export class ApiService {
   readonly cartCount=signal<number|null>(null);
@@ -35,4 +37,14 @@ export class ApiService {
   binding(queueName:string,exchangeName:string,routingKey:string,remove=false){return this.http.request(remove?'DELETE':'POST',this.base('adminUrl')+'/api/rabbitmq/bindings',{body:{queueName,exchangeName,routingKey}});}
   event(domain:string,reference:string,message:string){return this.http.post<PublishedEvent>(this.base('adminUrl')+'/api/rabbitmq/events',{domain,reference,message});}
   movements(){return this.http.get<Record<string,unknown>[]>(this.base('inventoryUrl')+'/api/inventory/movements');}
+  // EP3: Kafka y analitica. Nginx publica estas rutas en el mismo origen que la administracion.
+  kafkaCluster(){return this.http.get<Record<string,unknown>>(this.base('adminUrl')+'/api/kafka/cluster');}
+  kafkaTopics(){return this.http.get<KafkaTopic[]>(this.base('adminUrl')+'/api/kafka/topics');}
+  kafkaGroups(){return this.http.get<Record<string,unknown>[]>(this.base('adminUrl')+'/api/kafka/consumer-groups');}
+  kafkaMessages(topic:string){return this.http.get<Record<string,unknown>[]>(this.base('adminUrl')+'/api/kafka/topics/'+encodeURIComponent(topic)+'/messages?limit=10');}
+  kafkaCreateTopic(name:string){return this.http.post(this.base('adminUrl')+'/api/kafka/topics',{name,partitions:3,replicationFactor:3});}
+  kafkaDeleteTopic(name:string){return this.http.delete(this.base('adminUrl')+'/api/kafka/topics/'+encodeURIComponent(name));}
+  kafkaEvent(topic:string,message:string){return this.http.post<Record<string,unknown>>(this.base('adminUrl')+'/api/kafka/events',{topic,message});}
+  analytics(){return this.http.get<AnalyticsPanel>(this.base('adminUrl')+'/api/analytics/panel');}
+  streamingEvent(modo:string){return this.http.post<Record<string,unknown>>(this.config.backendUrl+'/api/streaming/eventos',{modo});}
 }

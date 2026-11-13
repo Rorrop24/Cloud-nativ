@@ -56,27 +56,32 @@ import json
 import socket
 import time
 config = json.load(open("/etc/punto-gamer/deployment.json"))
-addresses = config["backend"]["RABBITMQ_ADDRESSES"].split(",")
-for attempt in range(120):
-    try:
-        for address in addresses:
-            host, port = address.rsplit(":", 1)
-            with socket.create_connection((host, int(port)), timeout=3):
-                pass
-        break
-    except OSError:
-        if attempt == 119:
-            raise SystemExit("RabbitMQ aun no disponible; systemd reintentara")
-        time.sleep(5)
+brokers = {
+    "RabbitMQ": config["backend"]["RABBITMQ_ADDRESSES"],
+    "Kafka": config["backend"].get("KAFKA_BOOTSTRAP_SERVERS", ""),
+}
+for name, value in brokers.items():
+    addresses = [address for address in value.split(",") if address]
+    for attempt in range(120):
+        try:
+            for address in addresses:
+                host, port = address.rsplit(":", 1)
+                with socket.create_connection((host, int(port)), timeout=3):
+                    pass
+            break
+        except OSError:
+            if attempt == 119:
+                raise SystemExit(name + " aun no disponible; systemd reintentara")
+            time.sleep(5)
 PY
-docker compose -f compose.yml up -d --build --wait --wait-timeout 300
+docker compose -f compose.yml up -d --build --wait --wait-timeout 600
 curl --fail --silent http://127.0.0.1:8080/v2/productos/todos >/dev/null
 START
 chmod 0700 /usr/local/sbin/punto-gamer-application-start
 
 cat > /etc/systemd/system/punto-gamer-application.service <<'UNIT'
 [Unit]
-Description=Punto Gamer seis servicios Java y Angular
+Description=Punto Gamer ocho servicios Java y Angular
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service

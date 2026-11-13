@@ -1,8 +1,9 @@
 [CmdletBinding()]
 param(
     [switch]$AllowApplicationReplacement,
+    [switch]$AllowKafkaReplacement,
     [switch]$SkipBuild,
-    [int]$WaitSeconds = 900
+    [int]$WaitSeconds = 1500
 )
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -53,15 +54,17 @@ try {
         if ($actions -contains 'delete') {
             $release = $change.type -eq 'aws_s3_object' -and $change.name -in @('frontend', 'application')
             $application = $AllowApplicationReplacement -and ($change.address -eq 'aws_instance.application[0]' -or $change.type -eq 'aws_lb_target_group_attachment')
-            if (!$release -and !$application) { throw "Plan bloqueado: elimina o reemplaza $($change.address). No se aplico." }
+            $kafka = $AllowKafkaReplacement -and $change.address -eq 'aws_instance.kafka[0]'
+            if (!$release -and !$application -and !$kafka) { throw "Plan bloqueado: elimina o reemplaza $($change.address). No se aplico." }
         }
         if ($actions -notcontains 'no-op' -and $actions -notcontains 'read') {
             Write-Host "$($change.address): $($actions -join ', ')"
         }
     }
-    Write-Host 'Plan comprobado: sin creacion de IAM ni borrado de RDS, RabbitMQ o red. Aplicando despliegue autorizado.'
+    Write-Host 'Plan comprobado: sin creacion de IAM ni borrado de RDS, RabbitMQ, Kafka o red. Aplicando despliegue autorizado.'
     $applyArguments = @{ Mode = 'Apply' }
     if ($AllowApplicationReplacement) { $applyArguments.AllowApplicationReplacement = $true }
+    if ($AllowKafkaReplacement) { $applyArguments.AllowKafkaReplacement = $true }
     & (Join-Path $PSScriptRoot 'Deploy-Project.ps1') @applyArguments
 
     $outputsText = & terraform -chdir=infra/terraform output -json | Out-String
@@ -96,5 +99,9 @@ try {
     }
     & (Join-Path $PSScriptRoot 'Verify-Project.ps1')
     Write-Host "Web verificada: $website"
+    if ($outputs.kafka_ui_tunnel_command.value) {
+        Write-Host "Kafka-UI (deja el tunel abierto y entra a http://localhost:8095): $($outputs.kafka_ui_tunnel_command.value)"
+        Write-Host "RabbitMQ Management (http://localhost:15672): $($outputs.management_tunnel_command.value)"
+    }
     Write-Host 'Para completar login, registrar ese origen como Redirect URI SPA en Azure; la automatizacion AWS no cambia Azure.'
 } finally { $env:PATH = $previousPath; Set-Location -LiteralPath $initialDirectory.Path }

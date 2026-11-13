@@ -1,0 +1,88 @@
+#!/bin/bash
+set -euo pipefail
+umask 077
+
+# AL2023 trae curl-minimal; instalar curl completo provoca un conflicto de paquetes.
+dnf install -y docker curl-minimal
+systemctl enable --now docker amazon-ssm-agent
+
+install -d -m 0755 /usr/local/lib/docker/cli-plugins
+curl --fail --location --retry 5 --proto '=https' --proto-redir '=https' \
+  https://github.com/docker/compose/releases/download/v5.6.0/docker-compose-linux-x86_64 \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+echo '40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a  /usr/local/lib/docker/cli-plugins/docker-compose' | sha256sum --check --status
+chmod 0755 /usr/local/lib/docker/cli-plugins/docker-compose
+
+install -d -m 0700 /opt/punto-gamer/kafka
+printf '%s' '${compose_base64}' | base64 --decode > /opt/punto-gamer/kafka/compose.yml
+
+cat > /usr/local/sbin/punto-gamer-kafka-start <<'START'
+#!/bin/bash
+set -euo pipefail
+umask 077
+cd /opt/punto-gamer/kafka
+
+# Los brokers anuncian la IP privada de esta EC2; se lee de IMDSv2 en cada arranque.
+token=$(curl --fail --silent --retry 5 -X PUT http://169.254.169.254/latest/api/token \
+  -H 'X-aws-ec2-metadata-token-ttl-seconds: 300')
+address=$(curl --fail --silent --retry 5 -H "X-aws-ec2-metadata-token: $token" \
+  http://169.254.169.254/latest/meta-data/local-ipv4)
+if ! [[ "$address" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "No se obtuvo la IP privada de la instancia" >&2
+  exit 1
+fi
+printf 'KAFKA_HOST_IP=%s\n' "$address" > .env
+
+docker compose -f compose.yml config --quiet
+docker compose -f compose.yml up -d --wait --wait-timeout 600 zookeeper kafka-1 kafka-2 kafka-3
+
+# Un puerto abierto no basta: esperar a que los tres brokers esten registrados.
+brokers=0
+for attempt in $(seq 1 60); do
+  brokers=$(docker compose -f compose.yml exec -T kafka-1 kafka-broker-api-versions \
+    --bootstrap-server kafka-1:29092 2>/dev/null | grep -c '(id: ' || true)
+  if [ "$brokers" -ge 3 ]; then
+    break
+  fi
+  sleep 5
+done
+if [ "$brokers" -lt 3 ]; then
+  echo "El cluster no tiene tres brokers activos; systemd reintentara" >&2
+  exit 1
+fi
+
+# Topics declarados en kafka-defaults.properties. --if-not-exists permite reiniciar sin errores.
+for topic in ${topics}; do
+  docker compose -f compose.yml exec -T kafka-1 kafka-topics --bootstrap-server kafka-1:29092 \
+    --create --if-not-exists --topic "$topic" --partitions ${partitions} --replication-factor ${replication}
+done
+docker compose -f compose.yml exec -T kafka-1 kafka-topics --bootstrap-server kafka-1:29092 --list
+
+# Kafka-UI es una ayuda visual: si su imagen no descarga, los brokers siguen sirviendo.
+docker compose -f compose.yml up -d kafka-ui || echo "Kafka-UI no inicio; revisar la imagen" >&2
+START
+chmod 0700 /usr/local/sbin/punto-gamer-kafka-start
+
+cat > /etc/systemd/system/punto-gamer-kafka.service <<'UNIT'
+[Unit]
+Description=Punto Gamer Kafka cluster
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/punto-gamer/kafka
+ExecStart=/usr/local/sbin/punto-gamer-kafka-start
+ExecStop=/usr/bin/docker compose -f compose.yml stop
+TimeoutStartSec=1200
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now punto-gamer-kafka.service

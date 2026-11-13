@@ -6,7 +6,7 @@ import { InteractionStatus } from '@azure/msal-browser';
 import { filter, finalize, Observable } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from './auth/auth.service';
-import { ApiService, Catalog, Profile, Cart, Receipt, Document, Topology, PublishedEvent } from './api.service';
+import { ApiService, Catalog, Profile, Cart, Receipt, Document, Topology, PublishedEvent, KafkaTopic, AnalyticsPanel } from './api.service';
 import { finalPrice, productArt, selectProducts } from './catalog-utils';
 
 function errorMessage(error:HttpErrorResponse):string {
@@ -77,9 +77,11 @@ export class AdminComponent implements OnInit {
   readonly messages=computed(()=>this.topology()?.queues.reduce((s,q)=>s+q.messages,0)??0);
   readonly consumers=computed(()=>this.topology()?.queues.reduce((s,q)=>s+q.consumers,0)??0);
   readonly deadLetters=computed(()=>this.topology()?.queues.filter(q=>q.name.endsWith('.dlq')).reduce((s,q)=>s+q.messages,0)??0);
+  readonly kafkaTopics=signal<KafkaTopic[]>([]);readonly analytics=signal<AnalyticsPanel|null>(null);
   ngOnInit(){this.refresh();}
+  streaming(){this.loading.set(true);this.error.set('');this.api.kafkaTopics().pipe(finalize(()=>this.loading.set(false)),takeUntilDestroyed(this.destroyRef)).subscribe({next:t=>{this.kafkaTopics.set(t);this.updated.set(new Date());},error:e=>this.error.set(errorMessage(e))});this.api.analytics().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({next:a=>this.analytics.set(a),error:e=>this.error.set(errorMessage(e))});}
   refresh(){this.loading.set(true);this.error.set('');this.api.topology().pipe(finalize(()=>this.loading.set(false)),takeUntilDestroyed(this.destroyRef)).subscribe({next:t=>{this.topology.set(t);this.updated.set(new Date());},error:e=>this.error.set(errorMessage(e))});}
-  run(request:Observable<unknown>,message='Operación completada'){this.busy.set(true);this.notice.set('');this.error.set('');request.pipe(finalize(()=>this.busy.set(false)),takeUntilDestroyed(this.destroyRef)).subscribe({next:data=>{this.result.set(data??{resultado:message});this.notice.set(message);this.refresh();},error:(e:HttpErrorResponse)=>{this.error.set('HTTP '+e.status+' · '+errorMessage(e));this.result.set(e.error);}});}
+  run(request:Observable<unknown>,message='Operación completada'){this.busy.set(true);this.notice.set('');this.error.set('');request.pipe(finalize(()=>this.busy.set(false)),takeUntilDestroyed(this.destroyRef)).subscribe({next:data=>{this.result.set(data??{resultado:message});this.notice.set(message);if(this.tab()==='streaming')this.streaming();else this.refresh();},error:(e:HttpErrorResponse)=>{this.error.set('HTTP '+e.status+' · '+errorMessage(e));this.result.set(e.error);}});}
   event(domain:string,mode:string){const message=mode==='error'?'ERROR: prueba controlada':mode==='retry'?'RETRY: prueba temporal':'Prueba normal';this.busy.set(true);this.error.set('');this.notice.set('');this.api.event(domain,'EP2-'+Date.now(),message).pipe(finalize(()=>this.busy.set(false)),takeUntilDestroyed(this.destroyRef)).subscribe({next:e=>{this.lastEvent.set(e);this.result.set(e);this.notice.set('Publicación confirmada por RabbitMQ. Comprueba el procesamiento en los logs.');this.refresh();},error:e=>this.error.set(errorMessage(e))});}
 }
 

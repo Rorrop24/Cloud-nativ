@@ -41,11 +41,12 @@ variable "frontend_dist_path" {
 }
 
 variable "application_instance_type" {
-  type    = string
-  default = "t3.medium"
+  description = "EP3 ejecuta ocho servicios Java y Nginx: 8 GiB de memoria."
+  type        = string
+  default     = "t3.large"
   validation {
     condition     = can(regex("^t3a?\\.(medium|large|xlarge|2xlarge)$", var.application_instance_type))
-    error_message = "Backend y BFF necesitan una t3/t3a medium o superior."
+    error_message = "La aplicacion necesita una t3/t3a medium o superior."
   }
 }
 
