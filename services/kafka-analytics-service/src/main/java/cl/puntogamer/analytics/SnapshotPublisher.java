@@ -7,7 +7,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Publica el resumen agregado en su propio topic cuando hubo cambios: analitica como productor. */
+/**
+ * Publica el ResumenAnaliticaEvent en su topic compactado cuando hubo cambios.
+ * Siempre con la clave "resumen": la compactacion conserva solo el ultimo.
+ */
 @Component
 public class SnapshotPublisher {
     private static final Logger log = LoggerFactory.getLogger(SnapshotPublisher.class);
@@ -30,7 +33,7 @@ public class SnapshotPublisher {
             return;
         }
         try {
-            publisher.publish(properties.topics().resumen(), "resumen", state.summary());
+            publisher.publish(properties.topics().resumen(), "resumen", state.snapshot());
             published = version;
         } catch (RuntimeException error) {
             log.warn("[KAFKA PRODUCER ERROR] no se publico el resumen: {}", error.toString());

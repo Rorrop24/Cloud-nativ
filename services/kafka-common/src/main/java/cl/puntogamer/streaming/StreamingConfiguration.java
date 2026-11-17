@@ -1,6 +1,7 @@
 package cl.puntogamer.streaming;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.validation.Validator;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,7 +15,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 public class StreamingConfiguration {
 
     @Bean
-    public StreamPublisher streamPublisher(KafkaTemplate<String, String> template, ObjectMapper mapper) {
-        return new StreamPublisher(template, mapper);
+    public StreamPublisher streamPublisher(KafkaTemplate<String, Object> template, ObjectProvider<Validator> validator) {
+        return new StreamPublisher(template, validator.getIfAvailable());
     }
 }

@@ -54,7 +54,7 @@ public class StreamingController {
         String modo = String.valueOf(request.getOrDefault("modo", "venta"));
         if (modo.equals("invalido")) {
             String clave = "invalido-" + System.currentTimeMillis();
-            SendResult<String, String> result = esperar(publisher.publishRaw(properties.topics().ventas(), clave,
+            SendResult<String, Object> result = esperar(publisher.publishRaw(properties.topics().ventas(), clave,
                     "MENSAJE-INVALIDO: esto no es JSON"));
             Map<String, Object> respuesta = new LinkedHashMap<>();
             respuesta.put("modo", modo);
@@ -78,7 +78,7 @@ public class StreamingController {
         return producer.publicarPrueba(productoId, numero.intValue());
     }
 
-    private static SendResult<String, String> esperar(java.util.concurrent.CompletableFuture<SendResult<String, String>> envio) {
+    private static SendResult<String, Object> esperar(java.util.concurrent.CompletableFuture<SendResult<String, Object>> envio) {
         try {
             return envio.get(15, TimeUnit.SECONDS);
         } catch (InterruptedException error) {

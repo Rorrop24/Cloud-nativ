@@ -7,17 +7,19 @@ import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.KafkaAdmin;
 
 /**
- * Declara los seis topics. KafkaAdmin los crea al arrancar si aun no existen,
- * de modo que el orden de arranque entre servicios y brokers no importa.
+ * Declara los seis topics con particiones, replicas, retencion y politica de
+ * limpieza. KafkaAdmin los crea al arrancar si faltan y, con
+ * spring.kafka.admin.modify-topic-configs=true, corrige la configuracion de los
+ * que ya existen.
  */
 @Configuration
 public class StreamTopicsConfiguration {
 
     @Bean
     public KafkaAdmin.NewTopics projectTopics(StreamingProperties properties) {
-        NewTopic[] topics = properties.topics().all().stream()
-                .map(name -> TopicBuilder.name(name).partitions(properties.partitions())
-                        .replicas(properties.replicationFactor()).build())
+        NewTopic[] topics = properties.topicConfigs().entrySet().stream()
+                .map(entry -> TopicBuilder.name(entry.getKey()).partitions(properties.partitions())
+                        .replicas(properties.replicationFactor()).configs(entry.getValue()).build())
                 .toArray(NewTopic[]::new);
         return new KafkaAdmin.NewTopics(topics);
     }

@@ -11,7 +11,7 @@ export interface Receipt { id:number;total:number; }
 export interface Document { event_id:string;title:string;boleta_id:number;created_at:string; }
 export interface Topology { queues:{name:string;exists:boolean;messages:number;consumers:number}[];exchanges:string[]; }
 export interface PublishedEvent {eventId:string;reference:string;routed:boolean;}
-export interface KafkaTopic {name:string;partitions:number;replicationFactor:number;minInSyncReplicas:number;messages:number;project:boolean;deadLetter:boolean;}
+export interface KafkaTopic {name:string;partitions:number;replicationFactor:number;inSyncReplicas:number;retentionMs:string|null;cleanupPolicy:string|null;minInsyncReplicas:string|null;messages:number;project:boolean;deadLetter:boolean;}
 export interface AnalyticsPanel {resumen:Record<string,unknown>;productos:Record<string,unknown>[];stockBajo:Record<string,unknown>[];ventasRecientes:Record<string,unknown>[];dlt:Record<string,unknown>[];}
 @Injectable({providedIn:'root'})
 export class ApiService {
@@ -44,6 +44,11 @@ export class ApiService {
   kafkaMessages(topic:string){return this.http.get<Record<string,unknown>[]>(this.base('adminUrl')+'/api/kafka/topics/'+encodeURIComponent(topic)+'/messages?limit=10');}
   kafkaCreateTopic(name:string){return this.http.post(this.base('adminUrl')+'/api/kafka/topics',{name,partitions:3,replicationFactor:3});}
   kafkaDeleteTopic(name:string){return this.http.delete(this.base('adminUrl')+'/api/kafka/topics/'+encodeURIComponent(name));}
+  kafkaTopicConfig(name:string){return this.http.get<Record<string,unknown>>(this.base('adminUrl')+'/api/kafka/topics/'+encodeURIComponent(name)+'/config');}
+  kafkaUpdateTopicConfig(name:string,configs:Record<string,string>){return this.http.put<Record<string,unknown>>(this.base('adminUrl')+'/api/kafka/topics/'+encodeURIComponent(name)+'/config',{configs});}
+  kafkaPartitions(name:string,count:number){return this.http.post<Record<string,unknown>>(this.base('adminUrl')+'/api/kafka/topics/'+encodeURIComponent(name)+'/partitions',{count});}
+  kafkaSyncConfig(){return this.http.post<Record<string,unknown>[]>(this.base('adminUrl')+'/api/kafka/topics/sync-config',{});}
+  kafkaGroup(id:string){return this.http.get<Record<string,unknown>>(this.base('adminUrl')+'/api/kafka/consumer-groups/'+encodeURIComponent(id));}
   kafkaEvent(topic:string,message:string){return this.http.post<Record<string,unknown>>(this.base('adminUrl')+'/api/kafka/events',{topic,message});}
   analytics(){return this.http.get<AnalyticsPanel>(this.base('adminUrl')+'/api/analytics/panel');}
   streamingEvent(modo:string){return this.http.post<Record<string,unknown>>(this.config.backendUrl+'/api/streaming/eventos',{modo});}

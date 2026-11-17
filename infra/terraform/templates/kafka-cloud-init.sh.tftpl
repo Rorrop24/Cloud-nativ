@@ -34,7 +34,7 @@ fi
 printf 'KAFKA_HOST_IP=%s\n' "$address" > .env
 
 docker compose -f compose.yml config --quiet
-docker compose -f compose.yml up -d --wait --wait-timeout 600 zookeeper kafka-1 kafka-2 kafka-3
+docker compose -f compose.yml up -d --wait --wait-timeout 600 zookeeper-1 zookeeper-2 zookeeper-3 kafka-1 kafka-2 kafka-3
 
 # Un puerto abierto no basta: esperar a que los tres brokers esten registrados.
 brokers=0

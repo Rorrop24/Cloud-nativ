@@ -1,6 +1,8 @@
 package cl.puntogamer.analytics;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import cl.puntogamer.streaming.events.ProductoVendidoEvent;
+import cl.puntogamer.streaming.events.ResumenAnaliticaEvent;
+import cl.puntogamer.streaming.events.VentaRegistradaEvent;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -14,9 +16,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * Agregados en memoria. No usa base de datos: al arrancar, los consumidores releen
- * los topics desde el inicio y este estado se reconstruye solo. El offset mas alto
- * aplicado por particion evita contar dos veces un evento tras un rebalanceo.
+ * Logica de negocio de la analitica, sin dependencias de Kafka: recibe DTO ya
+ * validados y mantiene los agregados en memoria. Al arrancar, los consumidores
+ * releen los topics y este estado se reconstruye. El offset mas alto aplicado por
+ * particion evita contar dos veces un evento tras un rebalanceo.
  */
 @Component
 public class AnalyticsState {
@@ -56,44 +59,43 @@ public class AnalyticsState {
         return true;
     }
 
-    public synchronized void sale(JsonNode event) {
+    public synchronized void registrarVenta(VentaRegistradaEvent event) {
         version++;
-        lastEventAt = event.path("ocurridoEn").asText(Instant.now().toString());
-        if (event.path("prueba").asBoolean(false)) {
+        lastEventAt = event.ocurridoEn();
+        if (event.prueba()) {
             testEvents++;
             return;
         }
-        double total = event.path("total").asDouble(0);
+        double total = event.total();
         sales++;
         revenue += total;
         largestSale = Math.max(largestSale, total);
         Map<String, Object> sale = new LinkedHashMap<>();
-        sale.put("boletaId", event.path("boletaId").asLong());
+        sale.put("boletaId", event.boletaId());
         sale.put("total", total);
-        sale.put("unidades", event.path("unidades").asInt(0));
-        sale.put("ocurridoEn", lastEventAt);
+        sale.put("unidades", event.unidades());
+        sale.put("ocurridoEn", event.ocurridoEn());
         recentSales.addFirst(sale);
         while (recentSales.size() > RECENT) {
             recentSales.removeLast();
         }
     }
 
-    public synchronized void item(JsonNode event) {
+    public synchronized void registrarProducto(ProductoVendidoEvent event) {
         version++;
-        if (event.path("prueba").asBoolean(false)) {
+        if (event.prueba()) {
             return;
         }
-        int quantity = event.path("cantidad").asInt(0);
-        ProductTotals totals = products.computeIfAbsent(event.path("productoId").asText(), id -> new ProductTotals());
-        totals.units += quantity;
+        ProductTotals totals = products.computeIfAbsent(event.productoId(), id -> new ProductTotals());
+        totals.units += event.cantidad();
         totals.orders++;
-        if (event.hasNonNull("stockRestante")) {
-            totals.stock = event.path("stockRestante").asInt();
+        if (event.stockRestante() != null) {
+            totals.stock = event.stockRestante();
         }
-        units += quantity;
+        units += event.cantidad();
     }
 
-    public synchronized void deadLetter(String topic, int partition, long offset, String value, String reason) {
+    public synchronized void registrarDlt(String topic, int partition, long offset, String value, String reason) {
         version++;
         deadLetterCount++;
         Map<String, Object> entry = new LinkedHashMap<>();
@@ -112,11 +114,17 @@ public class AnalyticsState {
         return version;
     }
 
+    /** DTO que se publica en el topic de resumen. */
+    public synchronized ResumenAnaliticaEvent snapshot() {
+        return new ResumenAnaliticaEvent(sales, round(revenue), sales == 0 ? 0 : round(revenue / sales),
+                largestSale, units, products.size(), testEvents, deadLetterCount, lastEventAt, Instant.now().toString());
+    }
+
     public synchronized Map<String, Object> summary() {
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("ventas", sales);
-        summary.put("ingresos", Math.round(revenue * 100.0) / 100.0);
-        summary.put("ticketPromedio", sales == 0 ? 0 : Math.round(revenue / sales * 100.0) / 100.0);
+        summary.put("ingresos", round(revenue));
+        summary.put("ticketPromedio", sales == 0 ? 0 : round(revenue / sales));
         summary.put("ventaMayor", largestSale);
         summary.put("unidadesVendidas", units);
         summary.put("productosDistintos", products.size());
@@ -145,6 +153,10 @@ public class AnalyticsState {
 
     public synchronized List<Map<String, Object>> deadLetters() {
         return new ArrayList<>(deadLetters);
+    }
+
+    private static double round(double value) {
+        return Math.round(value * 100.0) / 100.0;
     }
 
     private static Map<String, Object> product(Map.Entry<String, ProductTotals> entry) {

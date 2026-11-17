@@ -8,6 +8,8 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -86,6 +88,56 @@ class KafkaAdminApiTest {
     void eventWithoutMessageIs400() throws Exception {
         mvc.perform(post("/api/kafka/events").with(admin()).contentType("application/json")
                 .content("{\"topic\":\"pruebas.eventos\",\"message\":\"\"}")).andExpect(status().isBadRequest());
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void updatesRetentionAndCleanupPolicy() throws Exception {
+        mvc.perform(put("/api/kafka/topics/ventas.eventos/config").with(admin()).contentType("application/json")
+                .content("{\"configs\":{\"retention.ms\":\"86400000\",\"cleanup.policy\":\"delete\"}}"))
+                .andExpect(status().isOk());
+        verify(service).updateTopicConfig(eq("ventas.eventos"), eq(java.util.Map.of("retention.ms", "86400000", "cleanup.policy", "delete")));
+    }
+
+    @Test
+    void rejectsNonEditableConfigWithoutReachingKafka() throws Exception {
+        mvc.perform(put("/api/kafka/topics/ventas.eventos/config").with(admin()).contentType("application/json")
+                .content("{\"configs\":{\"unclean.leader.election.enable\":\"true\"}}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void rejectsInvalidCleanupPolicyAndTinyRetention() throws Exception {
+        mvc.perform(put("/api/kafka/topics/ventas.eventos/config").with(admin()).contentType("application/json")
+                .content("{\"configs\":{\"cleanup.policy\":\"borrar\"}}")).andExpect(status().isBadRequest());
+        mvc.perform(put("/api/kafka/topics/ventas.eventos/config").with(admin()).contentType("application/json")
+                .content("{\"configs\":{\"retention.ms\":\"10\"}}")).andExpect(status().isBadRequest());
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void increasesPartitionsWithinLimits() throws Exception {
+        mvc.perform(post("/api/kafka/topics/evidencia.ep3/partitions").with(admin()).contentType("application/json")
+                .content("{\"count\":6}")).andExpect(status().isOk());
+        verify(service).increasePartitions("evidencia.ep3", 6);
+        mvc.perform(post("/api/kafka/topics/evidencia.ep3/partitions").with(admin()).contentType("application/json")
+                .content("{\"count\":50}")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void inspectsConsumerGroupAndValidatesOffsetReset() throws Exception {
+        mvc.perform(get("/api/kafka/consumer-groups/analitica-ventas").with(admin())).andExpect(status().isOk());
+        verify(service).consumerGroup("analitica-ventas");
+        mvc.perform(post("/api/kafka/consumer-groups/analitica-ventas/offsets").with(admin()).contentType("application/json")
+                .content("{\"to\":\"ayer\"}")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void customerCannotChangeTopicConfig() throws Exception {
+        mvc.perform(put("/api/kafka/topics/ventas.eventos/config")
+                .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_Pedidos.Read"))).contentType("application/json")
+                .content("{\"configs\":{\"retention.ms\":\"86400000\"}}")).andExpect(status().isForbidden());
         verifyNoInteractions(service);
     }
 }

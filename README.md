@@ -1,6 +1,6 @@
 # Punto Gamer — EP3
 
-**EP3 agrega Kafka para streaming y analítica:** un cluster de tres brokers en su propia EC2, dos servicios nuevos (`kafka-admin-service`, `kafka-analytics-service`) y la biblioteca `kafka-common`. Son ocho aplicaciones Java en total. Ver **[la guía EP3](docs/EP3-aws.md)** para topics, rutas, despliegue y evidencias. Lo que sigue describe la base EP2, que no cambió.
+**EP3 agrega Kafka para streaming y analítica:** un cluster de tres brokers en su propia EC2, dos servicios nuevos (`kafka-admin-service`, `kafka-analytics-service`) y la biblioteca `kafka-common`. Son ocho aplicaciones Java en total. Ver **[la guía EP3](docs/EP3-aws.md)** para topics, rutas, despliegue y evidencias, y **[la matriz pauta → código](docs/EP3-matriz-pauta.md)** para revisar cada indicador. Lo que sigue describe la base EP2, que no cambió.
 
 ## Base EP2
 

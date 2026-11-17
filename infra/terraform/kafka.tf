@@ -1,9 +1,9 @@
-# EP3: cluster Kafka (Zookeeper + 3 brokers + Kafka-UI) en una EC2 propia.
+# EP3: cluster Kafka (3 nodos Zookeeper + 3 brokers + Kafka-UI) en una EC2 propia.
 # Los brokers solo aceptan conexiones desde el security group del backend.
 # Kafka-UI escucha en 127.0.0.1:8095 de la EC2 y se abre por tunel SSM.
 
 variable "kafka_instance_type" {
-  description = "Tipo de la EC2 de Kafka. Tres brokers y Zookeeper necesitan al menos 8 GiB."
+  description = "Tipo de la EC2 de Kafka. Tres brokers y tres Zookeeper necesitan al menos 8 GiB."
   type        = string
   default     = "t3.large"
   validation {

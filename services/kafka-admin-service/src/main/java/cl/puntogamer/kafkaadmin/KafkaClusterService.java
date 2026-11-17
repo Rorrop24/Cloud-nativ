@@ -20,9 +20,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
+import org.apache.kafka.clients.admin.MemberDescription;
+import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -35,6 +40,11 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.InvalidPartitionsException;
+import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -116,12 +126,15 @@ public class KafkaClusterService {
         return result;
     }
 
+    // ---------------------------------------------------------------- topics
+
     public List<Map<String, Object>> topics() {
         Set<String> names = new TreeSet<>(await(admin().listTopics().names()));
         if (names.isEmpty()) {
             return List.of();
         }
         Map<String, TopicDescription> descriptions = await(admin().describeTopics(names).allTopicNames());
+        Map<String, Config> configs = configs(names);
         Map<TopicPartition, OffsetSpec> latest = new HashMap<>();
         Map<TopicPartition, OffsetSpec> earliest = new HashMap<>();
         for (TopicDescription description : descriptions.values()) {
@@ -150,11 +163,15 @@ public class KafkaClusterService {
                 replicas = Math.max(replicas, partition.replicas().size());
                 inSync = Math.min(inSync, partition.isr().size());
             }
+            Config config = configs.get(name);
             Map<String, Object> topic = new LinkedHashMap<>();
             topic.put("name", name);
             topic.put("partitions", description.partitions().size());
             topic.put("replicationFactor", replicas);
-            topic.put("minInSyncReplicas", inSync == Integer.MAX_VALUE ? 0 : inSync);
+            topic.put("inSyncReplicas", inSync == Integer.MAX_VALUE ? 0 : inSync);
+            topic.put("retentionMs", value(config, "retention.ms"));
+            topic.put("cleanupPolicy", value(config, "cleanup.policy"));
+            topic.put("minInsyncReplicas", value(config, "min.insync.replicas"));
             topic.put("messages", messages);
             topic.put("project", properties.topics().all().contains(name));
             topic.put("deadLetter", properties.topics().isDeadLetter(name));
@@ -164,11 +181,7 @@ public class KafkaClusterService {
     }
 
     public Map<String, Object> topic(String name) {
-        Map<String, TopicDescription> descriptions = await(admin().describeTopics(List.of(name)).allTopicNames());
-        TopicDescription description = descriptions.get(name);
-        if (description == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Topic no encontrado");
-        }
+        TopicDescription description = describe(name);
         List<Map<String, Object>> partitions = description.partitions().stream().map(partition -> {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("partition", partition.partition());
@@ -180,13 +193,15 @@ public class KafkaClusterService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("name", name);
         result.put("partitions", partitions);
+        result.put("config", topicConfig(name).get("config"));
         return result;
     }
 
     public void createTopic(Requests.TopicRequest request) {
-        await(admin().createTopics(List.of(new NewTopic(request.name(), request.partitionCount(), request.replicas()))).all());
-        log.info("[KAFKA ADMIN] topic creado name={} particiones={} replicas={}", request.name(),
-                request.partitionCount(), request.replicas());
+        NewTopic topic = new NewTopic(request.name(), request.partitionCount(), request.replicas()).configs(request.configs());
+        await(admin().createTopics(List.of(topic)).all());
+        log.info("[KAFKA ADMIN] topic creado name={} particiones={} replicas={} config={}", request.name(),
+                request.partitionCount(), request.replicas(), request.configs());
     }
 
     public void deleteTopic(String name) {
@@ -197,6 +212,95 @@ public class KafkaClusterService {
         log.info("[KAFKA ADMIN] topic eliminado name={}", name);
     }
 
+    /** Configuracion editable del topic, con su origen (por defecto, broker o propia del topic). */
+    public Map<String, Object> topicConfig(String name) {
+        Config config = configs(Set.of(name)).get(name);
+        if (config == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Topic no encontrado");
+        }
+        Map<String, Object> entries = new TreeMap<>();
+        for (String key : Requests.EDITABLE_CONFIGS) {
+            ConfigEntry entry = config.get(key);
+            if (entry != null) {
+                entries.put(key, Map.of("value", String.valueOf(entry.value()), "source", String.valueOf(entry.source())));
+            }
+        }
+        Map<String, String> declared = properties.topicConfigs().get(name);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("name", name);
+        result.put("config", entries);
+        result.put("declared", declared == null ? Map.of() : declared);
+        return result;
+    }
+
+    /** Cambia propiedades del topic con incrementalAlterConfigs (solo las indicadas). */
+    public Map<String, Object> updateTopicConfig(String name, Map<String, String> changes) {
+        describe(name);
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, name);
+        List<AlterConfigOp> operations = changes.entrySet().stream()
+                .map(change -> new AlterConfigOp(new ConfigEntry(change.getKey(), change.getValue()), AlterConfigOp.OpType.SET))
+                .toList();
+        await(admin().incrementalAlterConfigs(Map.of(resource, operations)).all());
+        log.info("[KAFKA ADMIN] configuracion actualizada topic={} cambios={}", name, changes);
+        return topicConfig(name);
+    }
+
+    /** Vuelve una propiedad al valor por defecto del broker. */
+    public Map<String, Object> resetTopicConfig(String name, String key) {
+        if (!Requests.EDITABLE_CONFIGS.contains(key)) {
+            throw new IllegalArgumentException("Propiedad no editable: " + key);
+        }
+        describe(name);
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, name);
+        AlterConfigOp operation = new AlterConfigOp(new ConfigEntry(key, ""), AlterConfigOp.OpType.DELETE);
+        await(admin().incrementalAlterConfigs(Map.of(resource, List.of(operation))).all());
+        log.info("[KAFKA ADMIN] configuracion restablecida topic={} propiedad={}", name, key);
+        return topicConfig(name);
+    }
+
+    /** Aumenta particiones. Kafka no permite reducirlas sin recrear el topic. */
+    public Map<String, Object> increasePartitions(String name, int count) {
+        int current = describe(name).partitions().size();
+        if (count <= current) {
+            throw new IllegalArgumentException("El topic ya tiene " + current + " particiones; solo se pueden aumentar");
+        }
+        await(admin().createPartitions(Map.of(name, NewPartitions.increaseTo(count))).all());
+        log.info("[KAFKA ADMIN] particiones aumentadas topic={} de={} a={}", name, current, count);
+        return Map.of("name", name, "previous", current, "partitions", count);
+    }
+
+    /**
+     * Aplica a los seis topics del proyecto la configuracion de kafka-defaults.properties.
+     * Corrige topics creados antes o modificados a mano. Es idempotente.
+     */
+    public List<Map<String, Object>> applyDeclaredConfigs() {
+        Map<String, Map<String, String>> declared = properties.topicConfigs();
+        Set<String> existing = await(admin().listTopics().names());
+        Map<ConfigResource, Collection<AlterConfigOp>> operations = new LinkedHashMap<>();
+        List<Map<String, Object>> result = new ArrayList<>();
+        declared.forEach((topic, configs) -> {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("topic", topic);
+            if (!existing.contains(topic)) {
+                entry.put("status", "NO_EXISTE");
+            } else {
+                operations.put(new ConfigResource(ConfigResource.Type.TOPIC, topic), configs.entrySet().stream()
+                        .map(c -> new AlterConfigOp(new ConfigEntry(c.getKey(), c.getValue()), AlterConfigOp.OpType.SET))
+                        .toList());
+                entry.put("status", "APLICADA");
+                entry.put("config", configs);
+            }
+            result.add(entry);
+        });
+        if (!operations.isEmpty()) {
+            await(admin().incrementalAlterConfigs(operations).all());
+        }
+        log.info("[KAFKA ADMIN] configuracion declarada aplicada a {} topics", operations.size());
+        return result;
+    }
+
+    // ---------------------------------------------------------- consumer groups
+
     public List<Map<String, Object>> consumerGroups() {
         List<String> ids = await(admin().listConsumerGroups().all()).stream()
                 .map(ConsumerGroupListing::groupId).sorted().toList();
@@ -206,34 +310,85 @@ public class KafkaClusterService {
         Map<String, ConsumerGroupDescription> descriptions = await(admin().describeConsumerGroups(ids).all());
         List<Map<String, Object>> result = new ArrayList<>();
         for (String id : ids) {
-            Map<TopicPartition, OffsetAndMetadata> committed =
-                    await(admin().listConsumerGroupOffsets(id).partitionsToOffsetAndMetadata());
-            Map<TopicPartition, OffsetSpec> request = new HashMap<>();
-            committed.forEach((partition, offset) -> {
-                if (offset != null) {
-                    request.put(partition, OffsetSpec.latest());
-                }
-            });
-            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> ends =
-                    request.isEmpty() ? Map.of() : await(admin().listOffsets(request).all());
+            Map<TopicPartition, Long> lags = lag(id);
             Map<String, Long> lagByTopic = new TreeMap<>();
-            long lag = 0;
-            for (Map.Entry<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> end : ends.entrySet()) {
-                long pending = Math.max(0, end.getValue().offset() - committed.get(end.getKey()).offset());
-                lag += pending;
-                lagByTopic.merge(end.getKey().topic(), pending, Long::sum);
-            }
+            lags.forEach((partition, pending) -> lagByTopic.merge(partition.topic(), pending, Long::sum));
             ConsumerGroupDescription description = descriptions.get(id);
             Map<String, Object> group = new LinkedHashMap<>();
             group.put("groupId", id);
             group.put("state", description == null ? "UNKNOWN" : String.valueOf(description.state()));
             group.put("members", description == null ? 0 : description.members().size());
-            group.put("lag", lag);
+            group.put("lag", lags.values().stream().mapToLong(Long::longValue).sum());
             group.put("lagByTopic", lagByTopic);
             result.add(group);
         }
         return result;
     }
+
+    /** Miembros del grupo y las particiones que tiene cada uno: muestra el balanceo de carga. */
+    public Map<String, Object> consumerGroup(String id) {
+        ConsumerGroupDescription description = await(admin().describeConsumerGroups(List.of(id)).all()).get(id);
+        if (description == null || "dead".equalsIgnoreCase(String.valueOf(description.state()))) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Consumer group no encontrado");
+        }
+        Map<TopicPartition, Long> lags = lag(id);
+        Map<TopicPartition, OffsetAndMetadata> committed = await(admin().listConsumerGroupOffsets(id).partitionsToOffsetAndMetadata());
+        List<Map<String, Object>> members = new ArrayList<>();
+        for (MemberDescription member : description.members()) {
+            List<String> assigned = member.assignment().topicPartitions().stream()
+                    .sorted(Comparator.comparing(TopicPartition::topic).thenComparingInt(TopicPartition::partition))
+                    .map(TopicPartition::toString).toList();
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("clientId", member.clientId());
+            detail.put("host", member.host());
+            detail.put("partitions", assigned);
+            members.add(detail);
+        }
+        List<Map<String, Object>> partitions = new ArrayList<>();
+        committed.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(Comparator.comparing(TopicPartition::topic).thenComparingInt(TopicPartition::partition)))
+                .forEach(entry -> {
+                    Map<String, Object> detail = new LinkedHashMap<>();
+                    detail.put("partition", entry.getKey().toString());
+                    detail.put("committedOffset", entry.getValue() == null ? null : entry.getValue().offset());
+                    detail.put("lag", lags.getOrDefault(entry.getKey(), 0L));
+                    partitions.add(detail);
+                });
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("groupId", id);
+        result.put("state", String.valueOf(description.state()));
+        result.put("assignor", description.partitionAssignor());
+        result.put("members", members);
+        result.put("partitions", partitions);
+        return result;
+    }
+
+    /**
+     * Mueve los offsets del grupo al inicio o al final de cada particion. Kafka solo lo
+     * permite con el grupo vacio, para no pisar a consumidores que estan leyendo.
+     */
+    public Map<String, Object> resetGroupOffsets(String id, String to) {
+        ConsumerGroupDescription description = await(admin().describeConsumerGroups(List.of(id)).all()).get(id);
+        String state = description == null ? "dead" : String.valueOf(description.state()).toLowerCase();
+        if (!state.equals("empty")) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "El grupo tiene consumidores activos (" + state + "); detenerlos antes de mover offsets");
+        }
+        Map<TopicPartition, OffsetAndMetadata> committed = await(admin().listConsumerGroupOffsets(id).partitionsToOffsetAndMetadata());
+        if (committed.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "El grupo no tiene offsets confirmados");
+        }
+        Map<TopicPartition, OffsetSpec> request = new HashMap<>();
+        committed.keySet().forEach(partition -> request.put(partition, to.equals("earliest") ? OffsetSpec.earliest() : OffsetSpec.latest()));
+        Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> targets = await(admin().listOffsets(request).all());
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        targets.forEach((partition, info) -> offsets.put(partition, new OffsetAndMetadata(info.offset())));
+        await(admin().alterConsumerGroupOffsets(id, offsets).all());
+        log.info("[KAFKA ADMIN] offsets del grupo {} movidos a {} en {} particiones", id, to, offsets.size());
+        return Map.of("groupId", id, "to", to, "partitions", offsets.size());
+    }
+
+    // ---------------------------------------------------------- mensajes
 
     /** Ultimos mensajes de un topic, sin grupo ni commits: no altera a los consumidores reales. */
     public List<Map<String, Object>> messages(String topic, int limit) {
@@ -290,7 +445,7 @@ public class KafkaClusterService {
     public Map<String, Object> publish(Requests.EventRequest request) {
         String key = request.key() == null || request.key().isBlank() ? "prueba-" + System.currentTimeMillis() : request.key();
         try {
-            SendResult<String, String> sent = publisher.publishRaw(request.topic(), key, request.message())
+            SendResult<String, Object> sent = publisher.publishRaw(request.topic(), key, request.message())
                     .get(15, TimeUnit.SECONDS);
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("topic", sent.getRecordMetadata().topic());
@@ -307,6 +462,49 @@ public class KafkaClusterService {
         }
     }
 
+    // ---------------------------------------------------------- utilidades
+
+    private TopicDescription describe(String name) {
+        TopicDescription description = await(admin().describeTopics(List.of(name)).allTopicNames()).get(name);
+        if (description == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Topic no encontrado");
+        }
+        return description;
+    }
+
+    private Map<String, Config> configs(Set<String> names) {
+        List<ConfigResource> resources = names.stream()
+                .map(name -> new ConfigResource(ConfigResource.Type.TOPIC, name)).toList();
+        Map<ConfigResource, Config> configs = await(admin().describeConfigs(resources).all());
+        Map<String, Config> result = new HashMap<>();
+        configs.forEach((resource, config) -> result.put(resource.name(), config));
+        return result;
+    }
+
+    private static String value(Config config, String key) {
+        ConfigEntry entry = config == null ? null : config.get(key);
+        return entry == null ? null : entry.value();
+    }
+
+    /** Lag por particion: ultimo offset del topic menos el offset confirmado por el grupo. */
+    private Map<TopicPartition, Long> lag(String groupId) {
+        Map<TopicPartition, OffsetAndMetadata> committed =
+                await(admin().listConsumerGroupOffsets(groupId).partitionsToOffsetAndMetadata());
+        Map<TopicPartition, OffsetSpec> request = new HashMap<>();
+        committed.forEach((partition, offset) -> {
+            if (offset != null) {
+                request.put(partition, OffsetSpec.latest());
+            }
+        });
+        if (request.isEmpty()) {
+            return Map.of();
+        }
+        Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> ends = await(admin().listOffsets(request).all());
+        Map<TopicPartition, Long> lags = new HashMap<>();
+        ends.forEach((partition, end) -> lags.put(partition, Math.max(0, end.offset() - committed.get(partition).offset())));
+        return lags;
+    }
+
     private <T> T await(KafkaFuture<T> future) {
         try {
             return future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -314,14 +512,21 @@ public class KafkaClusterService {
             Thread.currentThread().interrupt();
             throw unavailable(error);
         } catch (ExecutionException error) {
-            if (error.getCause() instanceof TopicExistsException) {
+            Throwable cause = error.getCause();
+            if (cause instanceof TopicExistsException) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "El topic ya existe");
             }
-            if (error.getCause() instanceof UnknownTopicOrPartitionException) {
+            if (cause instanceof UnknownTopicOrPartitionException) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Topic no encontrado");
             }
-            if (error.getCause() instanceof org.apache.kafka.common.errors.InvalidReplicationFactorException) {
+            if (cause instanceof GroupIdNotFoundException) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Consumer group no encontrado");
+            }
+            if (cause instanceof InvalidReplicationFactorException) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Replicas mayores que los brokers disponibles");
+            }
+            if (cause instanceof InvalidConfigurationException || cause instanceof InvalidPartitionsException) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Kafka rechazo el cambio: " + cause.getMessage());
             }
             throw unavailable(error);
         } catch (TimeoutException error) {
